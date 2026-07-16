@@ -40,7 +40,7 @@ is in [`docs/technical_documentation.pdf`](docs/technical_documentation.pdf).
 ## Repository layout
 
 ```
-album/            8 tracks: WAV demo masters + standard MIDI files + synced videos
+album/            9 tracks (8 stocks + the correlation duet): mastered WAVs + MIDI + synced videos
 LINER_NOTES.md    the album commentary: what every sound means in the market
 docs/             technical_documentation.tex/.pdf — the full mathematical spec
 pipeline/

@@ -35,6 +35,7 @@ the market wrote these tracks; we only chose the instruments.*
 | 06 | Social Graph | B♭ minor | 127 | **Breaks.** The one that broke the four-on-the-floor (IPO 2012; 2018 and 2022 are its architecture) |
 | 07 | Stream | E minor | 140 | **Uplifting trance.** Binge arcs, supersaw arps, the biggest builds on the record |
 | 08 | Ludicrous | B minor | 140 | **Acid.** Highest vol, 303 squelch, accents fired by the big days. Obviously |
+| 09 | Correlation One | F minor | 126 | **Techno duet.** Two stocks, one groove: the chipmaker plays bass, Cupertino plays lead, and their rolling 63-day correlation writes the harmony. When correlation spikes toward 1 — which is what markets do in a crisis — the two voices lock into unison; in calm, decoupled markets they drift apart into tension intervals. Breakdowns fire only when both are in deep drawdown at once. You are listening to diversification live and die |
 
 Each genre is matched to the statistics: low-volatility compounders get the patient
 grooves (deep house, dub), the high-volatility names get the aggressive ones

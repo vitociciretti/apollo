@@ -1,0 +1,112 @@
+"""Mastering chain for the album: the automatable part of 'DAW production'.
+Per track: tonal EQ (low shelf, mud cut, air shelf) -> bass mono below 120 Hz ->
+glue compression (2:1, RMS detector) -> loudness normalization to target LUFS
+(K-weighted approx) -> brickwall limiter -> 16-bit with TPDF dither.
+Originals preserved in premaster/.
+"""
+import numpy as np, wave, os, shutil
+from scipy import signal
+
+DIR = r"C:\Users\vito.ciciretti\Downloads\TechnoUS"
+PRE = os.path.join(DIR, "premaster")
+os.makedirs(PRE, exist_ok=True)
+TARGET_LUFS = -9.5
+SR = 44100
+
+def k_weight(x, sr):
+    """approximate K-weighting: 2nd-order highpass 60 Hz + high shelf +4 dB @ 2 kHz"""
+    b, a = signal.butter(2, 60/(sr/2), "high")
+    y = signal.lfilter(b, a, x)
+    bs, as_ = signal.iirfilter(2, 1500/(sr/2), btype="high", ftype="butter")
+    return y + 0.6*signal.lfilter(bs, as_, y)
+
+def lufs(L, R, sr):
+    k = (k_weight(L, sr)**2 + k_weight(R, sr)**2)/2
+    # gated mean over 400ms blocks (simple absolute gate at -70)
+    bl = int(0.4*sr)
+    blocks = [k[i:i+bl].mean() for i in range(0, len(k)-bl, bl//4)]
+    blocks = [b for b in blocks if 10*np.log10(b + 1e-12) > -70]
+    return -0.691 + 10*np.log10(np.mean(blocks) + 1e-12)
+
+def shelf(x, sr, f0, gain_db, kind):
+    """first-order shelf via mixing a filtered band back in"""
+    b, a = signal.butter(2, f0/(sr/2), "low" if kind == "low" else "high")
+    band = signal.lfilter(b, a, x)
+    return x + (10**(gain_db/20) - 1)*band
+
+def peak_cut(x, sr, f0, gain_db, q=1.0):
+    w0 = f0/(sr/2)
+    b, a = signal.iirpeak(w0, q)
+    band = signal.lfilter(b, a, x)
+    return x + (10**(gain_db/20) - 1)*band
+
+def compress(L, R, sr, thresh_db=-18, ratio=2.0, atk=0.03, rel=0.2):
+    det = np.maximum(np.abs(L), np.abs(R))
+    # RMS-ish smoothing of the detector
+    a_atk, a_rel = np.exp(-1/(atk*sr)), np.exp(-1/(rel*sr))
+    env = np.empty_like(det); e = 0.0
+    for i, d in enumerate(det):
+        a = a_atk if d > e else a_rel
+        e = a*e + (1-a)*d
+        env[i] = e
+    env_db = 20*np.log10(env + 1e-9)
+    over = np.maximum(env_db - thresh_db, 0)
+    gain = 10**(-(over*(1 - 1/ratio))/20)
+    return L*gain, R*gain
+
+def limit(L, R, sr, ceiling=0.98):
+    """true brickwall: instant attack, smooth release, ceiling guaranteed"""
+    det = np.maximum(np.abs(L), np.abs(R))
+    g_req = np.minimum(1.0, ceiling/np.maximum(det, 1e-9))
+    a_rel = np.exp(-1/(0.08*sr))
+    g = np.empty_like(g_req); e = 1.0
+    for i in range(len(g_req)):
+        e = min(g_req[i], a_rel*e + (1 - a_rel))   # clamp to required -> ceiling exact
+        g[i] = e
+    return L*g, R*g
+
+def master(path):
+    with wave.open(path) as w:
+        sr = w.getframerate()
+        raw = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float64)/32767
+    L, R = raw[0::2].copy(), raw[1::2].copy()
+    # EQ: +1.2 dB low shelf 90 Hz, -1.5 dB mud 300 Hz, +1.8 dB air 8 kHz
+    for ch in (L, R):
+        ch[:] = shelf(ch, sr, 90, 1.2, "low")
+        ch[:] = peak_cut(ch, sr, 300, -1.5, q=0.9)
+        ch[:] = shelf(ch, sr, 8000, 1.8, "high")
+    # bass mono below 120 Hz
+    b, a = signal.butter(2, 120/(sr/2), "low")
+    side = (L - R)/2
+    side_lo = signal.lfilter(b, a, side)
+    L, R = L - side_lo, R + side_lo
+    # glue
+    L, R = compress(L, R, sr)
+    # loudness normalize + limit (two passes to converge)
+    for _ in range(2):
+        cur = lufs(L, R, sr)
+        g = 10**((TARGET_LUFS - cur)/20)
+        L, R = L*g, R*g
+        L, R = limit(L, R, sr)
+    final = lufs(L, R, sr)
+    # 16-bit TPDF dither
+    dith = (np.random.rand(len(L)) - np.random.rand(len(L)))/32767
+    out = np.empty(2*len(L), dtype=np.int16)
+    out[0::2] = np.clip((L + dith)*32767, -32767, 32767).astype(np.int16)
+    out[1::2] = np.clip((R + dith)*32767, -32767, 32767).astype(np.int16)
+    with wave.open(path, "w") as w:
+        w.setnchannels(2); w.setsampwidth(2); w.setframerate(sr)
+        w.writeframes(out.tobytes())
+    return final, np.abs(np.stack([L, R])).max()
+
+if __name__ == "__main__":
+    for f in sorted(os.listdir(DIR)):
+        if f.endswith(".wav"):
+            src = os.path.join(DIR, f)
+            pre = os.path.join(PRE, f)
+            if os.path.exists(pre):
+                shutil.copy2(pre, src)          # re-master from the clean premaster
+            else:
+                shutil.copy2(src, pre)
+            lu, pk = master(src)
+            print(f"{f:28s} -> {lu:6.1f} LUFS, peak {pk:.3f}")

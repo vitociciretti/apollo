@@ -44,6 +44,7 @@ your identity and payment details.
 | 6 | Social Graph | 3:30 | " |
 | 7 | Stream | 2:27 | " |
 | 8 | Ludicrous | 2:24 | " |
+| 9 | Correlation One | 2:43 | " |
 
 Album description (for stores that take one):
 
@@ -54,9 +55,11 @@ Album description (for stores that take one):
 
 ## Honest quality note
 
-These WAVs are algorithmic demo masters (numpy oscillators). They are releasable —
-levels are clean, no clipping — but a producer pass in a DAW using the included
-MIDI files (real synths, proper mixdown, loudness mastering to ~-9 LUFS for club
-electronic) would lift them to commercial standard. Options: release now and
+These WAVs are algorithmic masters: numpy-oscillator synthesis, then a real
+mastering chain (tonal EQ, bass-mono below 120 Hz, glue compression, ~-11 LUFS
+integrated with a true-peak-safe limiter at -0.2 dBFS — Spotify normalizes to
+-14 LUFS, so loudness is competitive). Unmastered premasters are preserved in
+`premaster/`. What a DAW pass with the included MIDI files would still add:
+professional synth voices and per-track mix decisions. Options: release now and
 re-release a "producer edition" later, or produce first. Releasing now is the
 faster way to learn if anyone cares.
