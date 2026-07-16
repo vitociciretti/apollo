@@ -1,9 +1,10 @@
-"""Tech(no) US — album pipeline.
-Each track is composed from a stock's real 2010-2026 daily history:
-  vol -> filter cutoff + kick velocity + BPM (per track)
-  price z-score vs 252d MA -> bar harmony | big days -> octave jumps, stab gates
-  kurtosis -> detune/brightness | worst-quartile drawdowns -> breakdowns
-  recoveries -> clap-roll builds + crash | >4 sigma days -> crash
+"""Tech(no) US — album pipeline, v2 (multi-genre).
+Each track is composed from a stock's real 2010-2026 daily history (yfinance adjusted closes):
+  vol -> filter cutoff + kick velocity + BPM | price z-score vs 252d MA -> bar harmony
+  big days -> octave jumps / accents / stab gates | kurtosis -> detune & brightness
+  worst-quartile drawdowns -> breakdowns | recoveries -> roll builds + crash | >4 sigma -> crash
+Each track also carries a GENRE STYLE (techno, deep house, dub, trance, acid, breaks...)
+that sets groove (kick pattern, swing), bass articulation (roll/offbeat/arp/acid), and pad weight.
 Outputs per track: WAV demo master + standard MIDI file (bass/stabs/pads/drums + CC74 cutoff).
 """
 import numpy as np, wave, os
@@ -15,17 +16,31 @@ os.makedirs(OUT, exist_ok=True)
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
 rng = np.random.default_rng(11)
 
-ALBUM = [  # ticker, title, root pitch class name, root midi (bass octave)
-    ("NVDA",  "01_Chipmaker",        29),  # F
-    ("AAPL",  "02_Cupertino",        33),  # A
-    ("MSFT",  "03_Redmond",          26),  # D
-    ("GOOGL", "04_PageRank",         31),  # G
-    ("AMZN",  "05_Everything_Store", 36),  # C
-    ("META",  "06_Social_Graph",     34),  # Bb
-    ("NFLX",  "07_Stream",           28),  # E
-    ("TSLA",  "08_Ludicrous",        35),  # B
+# genre styles: groove + articulation parameters consumed by compose()/synth()
+STYLES = {
+    #            bass mode      kick      swing  stab positions    pad   res  bpm base
+    "techno":    dict(bass="roll",    kick="four",  swing=0.00, stabs=(3, 7, 10, 14), pad=1.0, res=0.0, bpm0=128),
+    "deephouse": dict(bass="offbeat", kick="four",  swing=0.16, stabs=(2, 6, 10, 14), pad=0.8, res=0.0, bpm0=120),
+    "dub":       dict(bass="offbeat", kick="four",  swing=0.08, stabs=(2, 10),        pad=1.5, res=0.0, bpm0=118),
+    "trance":    dict(bass="arp",     kick="four",  swing=0.00, stabs=(3, 7, 11, 15), pad=1.3, res=0.0, bpm0=136),
+    "prog":      dict(bass="arp",     kick="four",  swing=0.05, stabs=(3, 7, 10, 14), pad=1.1, res=0.0, bpm0=128),
+    "warehouse": dict(bass="roll",    kick="four",  swing=0.00, stabs=(3, 6, 10, 13), pad=0.7, res=0.0, bpm0=131),
+    "breaks":    dict(bass="roll",    kick="break", swing=0.10, stabs=(3, 7, 10, 14), pad=0.9, res=0.0, bpm0=126),
+    "acid":      dict(bass="acid",    kick="four",  swing=0.00, stabs=(7, 14),        pad=0.6, res=8.0, bpm0=134),
+}
+
+ALBUM = [  # ticker, title, root midi (bass octave), style
+    ("NVDA",  "01_Chipmaker",        29, "techno"),     # F  — peak-time: the flagship story
+    ("AAPL",  "02_Cupertino",        33, "deephouse"),  # A  — low vol, steady groove, swung
+    ("MSFT",  "03_Redmond",          26, "dub"),        # D  — lowest vol: spacious dub echoes
+    ("GOOGL", "04_PageRank",         31, "prog"),       # G  — long steady runs: progressive arps
+    ("AMZN",  "05_Everything_Store", 36, "warehouse"),  # C  — relentless logistics: driving
+    ("META",  "06_Social_Graph",     34, "breaks"),     # Bb — broke the 4/4: breakbeat
+    ("NFLX",  "07_Stream",           28, "trance"),     # E  — binge arcs: uplifting trance
+    ("TSLA",  "08_Ludicrous",        35, "acid"),       # B  — highest vol: 303 squelch
 ]
 PHRYG = [0, 1, 3, 5, 7, 8, 10]; AEOL = [0, 2, 3, 5, 7, 8, 10]
+ARPSEQ = [0, 2, 4, 7, 4, 2]                             # trance/prog arpeggio degree cycle
 midi2hz = lambda m: 440*2**((m-69)/12)
 
 def roll(x, w, fn):
@@ -37,7 +52,8 @@ def _kurt(x):
     return ((x-x.mean())**4).mean()/v**2 if v > 1e-12 else 3.0
 
 # ---------------- composition: returns -> events ----------------
-def compose(rs, root):
+def compose(rs, root, style_name):
+    st = STYLES[style_name]
     n = len(rs)
     dp16 = max(2, round(n/1536))
     N16 = (n//dp16)//16*16; NBAR = N16//16
@@ -48,7 +64,7 @@ def compose(rs, root):
     bear = dd > np.quantile(dd, 0.78)
     sigma = rs.std()
     annvol = rs.std()*np.sqrt(252)
-    bpm = int(np.clip(120 + 40*(annvol-0.20), 122, 134))
+    bpm = int(np.clip(st["bpm0"] + 30*(annvol - 0.35), st["bpm0"]-6, st["bpm0"]+8))
 
     bar = []
     for b in range(NBAR):
@@ -64,6 +80,7 @@ def compose(rs, root):
         if bearb[b] and not bearb[b+1]: buildb[b] = True
 
     ev = dict(bpm=bpm, dp16=dp16, N16=N16, NBAR=NBAR, root=root, bear=bear, rs=rs,
+              style=st, style_name=style_name,
               notes=[], drums=[], cc=[], volz=volz, kurtz=kurtz, bearb=bearb)
     for k in range(N16):
         b16 = k % 16; bn = k//16; B = bar[bn]
@@ -71,33 +88,57 @@ def compose(rs, root):
         vz, kz = volz[bn], kurtz[bn]
         intro = bn < 4; outro = bn >= NBAR-2
         i0, i1 = k*dp16, (k+1)*dp16
+        big = np.abs(rs[i0:i1]).max() > sigma
         vel = int(70 + 45*vz)
         if b16 == 0:
             ev["cc"].append((k, 74, int(30 + 80*vz)))          # filter cutoff automation
-        if b16 % 4 == 0 and not B["bear"] and not outro:
-            ev["drums"].append((k, 36, min(127, vel+15)))      # kick
+        # ---- drums ----
+        kick_here = (b16 % 4 == 0) if st["kick"] == "four" else (b16 in (0, 10))
+        if kick_here and not B["bear"] and not outro:
+            ev["drums"].append((k, 36, min(127, vel+15)))
+        if st["kick"] == "break" and b16 in (4, 12) and not B["bear"]:
+            ev["drums"].append((k, 38, int(85+25*vz)))         # breakbeat snare
         if b16 % 4 == 2:
             ev["drums"].append((k, 46, int(45+30*vz)))         # open hat offbeat
         else:
             ev["drums"].append((k, 42, int(30+25*vz)))         # closed hat
-        if b16 in (4, 12) and not B["bear"]:
-            ev["drums"].append((k, 39, int(75+25*vz)))         # clap
+        if st["kick"] == "four" and b16 in (4, 12) and not B["bear"]:
+            ev["drums"].append((k, 39, int(75+25*vz)))         # clap on 2 & 4
         if buildb[bn]:
-            ev["drums"].append((k, 39, int(30+90*(b16/15))))   # clap-roll build
+            ev["drums"].append((k, 39, int(30+90*(b16/15))))   # roll build
         if b16 == 0 and bn > 0 and bearb[bn-1] and not B["bear"]:
             ev["drums"].append((k, 49, 100))                   # recovery crash
         if np.abs(rs[i0:i1]).max()/sigma > 4:
             ev["drums"].append((k, 49, 85))                    # shock crash
-        if not B["bear"] and not intro and not outro:          # rolling bass
-            octv = 12 if (b16 % 4 == 2 and np.abs(rs[i0:i1]).max() > sigma) else 0
-            m = root + scale[B["deg"] % 7] + octv
-            v = int(vel*(1.15 if b16 % 2 == 1 else 0.85))
-            ev["notes"].append((k, 0.9, m, min(127, v), 0))    # (t16, dur16, midi, vel, chan)
-        if b16 in (3, 7, 10, 14) and not intro:                # gated syncopated stabs
+        # ---- bass ----
+        if not B["bear"] and not intro and not outro:
+            mode = st["bass"]
+            if mode == "roll":
+                octv = 12 if (b16 % 4 == 2 and big) else 0
+                m = root + scale[B["deg"] % 7] + octv
+                v = int(vel*(1.15 if b16 % 2 == 1 else 0.85))
+                ev["notes"].append((k, 0.9, m, min(127, v), 0))
+            elif mode == "offbeat":                            # house/dub: 8th offbeats, longer
+                if b16 % 4 == 2:
+                    m = root + scale[B["deg"] % 7] + (12 if big else 0)
+                    ev["notes"].append((k, 1.8, m, min(127, vel), 0))
+            elif mode == "arp":                                # trance/prog: run the arp cycle
+                deg = (B["deg"] + ARPSEQ[k % len(ARPSEQ)]) % 7
+                octv = 12*((k % 3 == 2) + (1 if big else 0))
+                v = int(vel*(1.2 if b16 % 4 == 0 else 0.8))
+                ev["notes"].append((k, 0.85, root+12+scale[deg]+octv, min(127, v), 0))
+            elif mode == "acid":                               # 303: 16ths, data-driven accents
+                accent = big or (b16 in (3, 11))
+                m = root + scale[B["deg"] % 7] + (12 if b16 % 8 == 6 else 0)
+                v = 120 if accent else int(vel*0.75)           # vel>110 = accent -> filter bite
+                ev["notes"].append((k, 0.55 if accent else 0.9, m, min(127, v), 0))
+        # ---- stabs ----
+        if b16 in st["stabs"] and not intro:
             if np.abs(rs[i0:i1]).sum() > np.abs(rs).mean()*dp16:
                 deg = B["deg"]
                 for c in (scale[deg % 7], scale[(deg+2) % 7]+12, scale[(deg+4) % 7]+12):
-                    ev["notes"].append((k, 1.8, root+24+c, int(55+40*kz), 1))
+                    ev["notes"].append((k, 3.2 if style_name == "dub" else 1.8,
+                                        root+24+c, int(55+40*kz), 1))
     return ev
 
 # ---------------- per-ticker spectral peaks (for the pads) ----------------
@@ -118,20 +159,24 @@ def spectral_peaks(rs, root, nsel=6):
         hz = f[i]*2.2e5
         m = 12*np.log2(hz/440) + 69
         cands = [mm for mm in range(int(m)-6, int(m)+7) if mm % 12 in pcs]
-        mq = min(cands, key=lambda mm: abs(mm-m)) - 24         # 2 octaves down: pads, not whistles
+        mq = min(cands, key=lambda mm: abs(mm-m)) - 24
         out.append((1/f[i], midi2hz(mq), mq, np.sqrt(P[i]/P[sel[0]])))
     return out
 
 # ---------------- synthesis: events -> stereo wav ----------------
 SR = 44100
 def synth(ev, peaks, path):
+    st = ev["style"]
     bpm, N16 = ev["bpm"], ev["N16"]
     S16 = 60/bpm/4
+    swing = st["swing"]
     total = int(N16*S16*SR)
     L = np.zeros(total); R = np.zeros(total)
-    def add(st, sig, pl=1.0, pr=1.0):
-        e = min(st+len(sig), total)
-        L[st:e] += sig[:e-st]*pl; R[st:e] += sig[:e-st]*pr
+    def t16(k):                                              # swung 16th start sample
+        return int((k + (swing if k % 2 else 0))*S16*SR)
+    def add(stt, sig, pl=1.0, pr=1.0):
+        e = min(stt+len(sig), total)
+        L[stt:e] += sig[:e-stt]*pl; R[stt:e] += sig[:e-stt]*pr
     def kick(a):
         t = np.arange(int(SR*0.20))/SR
         return a*(np.sin(2*np.pi*(110*np.exp(-t*16)+45)*t)*np.exp(-t*14) + 0.5*np.sin(2*np.pi*900*t)*np.exp(-t*300))
@@ -143,43 +188,60 @@ def synth(ev, peaks, path):
         t = np.arange(int(SR*0.15))/SR
         b, aa = signal.butter(2, [900/(SR/2), 3500/(SR/2)], "band")
         return a*signal.lfilter(b, aa, rng.standard_normal(len(t)))*np.exp(-t*30)*(1+0.7*(np.sin(2*np.pi*55*t) > 0))
+    def snare(a):
+        t = np.arange(int(SR*0.14))/SR
+        b, aa = signal.butter(2, [1200/(SR/2), 5000/(SR/2)], "band")
+        return a*(signal.lfilter(b, aa, rng.standard_normal(len(t)))*np.exp(-t*26) + 0.5*np.sin(2*np.pi*185*t)*np.exp(-t*32))
     def crash(a):
         t = np.arange(int(SR*0.9))/SR
         b, aa = signal.butter(4, 6000/(SR/2), "high")
         return a*signal.lfilter(b, aa, rng.standard_normal(len(t)))*np.exp(-t*4.5)
-    def sawstack(hz, dur, det, cutoff, a):
+    def sawstack(hz, dur, det, cutoff, a, voices=2, reso=0.0):
         t = np.arange(int(SR*dur))/SR
         y = np.zeros(len(t))
-        for dt in (1-det, 1+det):
+        dts = np.linspace(1-det, 1+det, voices) if voices > 2 else (1-det, 1+det)
+        for dt in dts:
             f0 = hz*dt
             for h in range(1, int(min(cutoff*2, SR*0.45)/f0)+1):
                 y += np.sin(2*np.pi*h*f0*t)/h
         b, aa = signal.butter(2, min(cutoff/(SR/2), 0.95), "low")
+        y = signal.lfilter(b, aa, y)
+        if reso > 0:                                          # 303 resonance: peak at the corner
+            w0 = float(np.clip(cutoff/(SR/2), 0.01, 0.9))
+            bp, ap = signal.iirpeak(w0, reso)
+            y = y + 1.6*signal.lfilter(bp, ap, y)
         env = np.minimum(1, np.minimum(t/0.004, np.maximum(0, (dur-t)/(dur*0.35))))
-        return a*env*signal.lfilter(b, aa, y)
+        return a*env*y
 
-    cutmap = {k: v for k, _, v in [(c[0], c[1], c[2]) for c in ev["cc"]]}
+    cutmap = {c[0]: c[2] for c in ev["cc"]}
     cut = 200
     kicks = []
-    DRUM = {36: lambda v: kick(v), 39: lambda v: clap(v), 42: lambda v: hat(v, 0.025, 8000, 160),
-            46: lambda v: hat(v, 0.18, 7000, 18), 49: lambda v: crash(v)}
+    DRUM = {36: (kick, 0.95), 38: (snare, 0.60), 39: (clap, 0.55),
+            42: (lambda v: hat(v, 0.025, 8000, 160), 0.28),
+            46: (lambda v: hat(v, 0.18, 7000, 18), 0.16), 49: (crash, 0.55)}
     for k, note, vel in ev["drums"]:
-        st = int(k*S16*SR); v = vel/127
-        d = DRUM[note](v*(0.95 if note == 36 else 0.55 if note == 39 else 0.28 if note == 46 else 0.16 if note == 42 else 0.55))
+        stt = t16(k); v = vel/127
+        fn, g = DRUM[note]
+        d = fn(v*g)
         pan = (0.8, 1.0) if note == 46 else (1.0, 0.8) if note == 42 else (1.0, 1.0)
-        add(st, d, *pan)
-        if note == 36: kicks.append(st)
+        add(stt, d, *pan)
+        if note == 36: kicks.append(stt)
+    is_trance = ev["style_name"] in ("trance", "prog")
     for k, dur, m, vel, chan in ev["notes"]:
         if k in cutmap: cut = 160 + 28*cutmap[k]
-        st = int(k*S16*SR); v = vel/127
+        stt = t16(k); v = vel/127
         if chan == 0:
-            add(st, sawstack(midi2hz(m), S16*dur, 0.005, cut, 0.16*v*1.6))
+            reso = st["res"]
+            c = cut*(1.6 if (reso > 0 and vel > 110) else 1.0)  # acid accent opens the filter
+            nv = 6 if is_trance else 2                          # supersaw for trance
+            det = 0.010 if is_trance else 0.005
+            add(stt, sawstack(midi2hz(m), S16*dur, det, c, 0.16*v*1.6, voices=nv, reso=reso))
         else:
-            s = sawstack(midi2hz(m), S16*dur, 0.008, 900+cut, 0.055*v*1.6)
+            s = sawstack(midi2hz(m), S16*dur, 0.008, 900+cut, 0.055*v*1.6, voices=4 if is_trance else 2)
             pan = 0.35 if (k//4) % 2 else -0.35
-            add(st, s, 1-max(pan, 0), 1+min(pan, 0))
+            add(stt, s, 1-max(pan, 0), 1+min(pan, 0))
 
-    # pads: Hilbert band envelopes, breakdown-gated, scale-quantized
+    # pads: Hilbert band envelopes, breakdown-gated, scale-quantized, style-weighted
     rs, bear = ev["rs"], ev["bear"]; n = len(rs)
     a_ = np.abs(rs) - np.abs(rs).mean()
     t_full = np.arange(total)/SR
@@ -193,7 +255,7 @@ def synth(ev, peaks, path):
         env = signal.filtfilt(*signal.butter(2, 0.05), env)
         env = np.maximum(env, 0); env /= max(env.max(), 1e-12)
         voice = np.sin(2*np.pi*hz*0.997*t_full) + np.sin(2*np.pi*hz*1.003*t_full)
-        pad = np.interp(day_axis, np.arange(n), env)*voice*0.5*(0.16*bg)*lfo*amp
+        pad = np.interp(day_axis, np.arange(n), env)*voice*0.5*(0.16*bg)*lfo*amp*st["pad"]
         pan = j/max(len(peaks)-1, 1)
         L += pad*(1-0.5*pan); R += pad*(0.5+0.5*pan)
 
@@ -206,11 +268,12 @@ def synth(ev, peaks, path):
     for ks in kicks:
         d = kick(0.9); e = min(ks+len(d), total)
         L[ks:e] += d[:e-ks]*0.35; R[ks:e] += d[:e-ks]*0.35
-    # ping-pong delay on highs
+    # ping-pong delay on highs (dub gets a longer, deeper tail)
     db, da = signal.butter(2, 1200/(SR/2), "high")
     hiL, hiR = signal.lfilter(db, da, L), signal.lfilter(db, da, R)
+    fb = 0.38 if ev["style_name"] == "dub" else 0.22
     dl = int(S16*3*SR)
-    L[dl:] += hiR[:-dl]*0.22; R[2*dl:] += hiL[:-2*dl]*0.15
+    L[dl:] += hiR[:-dl]*fb; R[2*dl:] += hiL[:-2*dl]*fb*0.7
     # master
     b, aa = signal.butter(2, 25/(SR/2), "high")
     L, R = signal.lfilter(b, aa, L), signal.lfilter(b, aa, R)
@@ -228,10 +291,12 @@ def synth(ev, peaks, path):
 # ---------------- MIDI export: events -> .mid ----------------
 def write_midi(ev, peaks, path):
     TPQ = 480; T16 = TPQ//4
+    swing = ev["style"]["swing"]
     mid = mido.MidiFile(ticks_per_beat=TPQ)
     meta = mido.MidiTrack(); mid.tracks.append(meta)
     meta.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(ev["bpm"]), time=0))
     meta.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
+    def tick(t): return int((t + (swing if int(t) % 2 else 0))*T16)
 
     def track_from(events, chan, program=None, name=""):
         tr = mido.MidiTrack(); mid.tracks.append(tr)
@@ -241,24 +306,22 @@ def write_midi(ev, peaks, path):
         msgs = []
         for e in events:
             if e[0] == "cc":
-                _, t16, cc, val = e
-                msgs.append((int(t16*T16), 0, mido.Message("control_change", channel=chan, control=cc, value=val, time=0)))
+                _, tt, cc, val = e
+                msgs.append((tick(tt), 0, mido.Message("control_change", channel=chan, control=cc, value=val, time=0)))
             else:
-                _, t16, dur16, note, vel = e
-                on, off = int(t16*T16), int((t16+dur16)*T16)
-                msgs.append((on, 1, mido.Message("note_on", channel=chan, note=note, velocity=vel, time=0)))
-                msgs.append((off, 0, mido.Message("note_off", channel=chan, note=note, velocity=0, time=0)))
+                _, tt, dur16, note, vel = e
+                msgs.append((tick(tt), 1, mido.Message("note_on", channel=chan, note=note, velocity=vel, time=0)))
+                msgs.append((tick(tt+dur16), 0, mido.Message("note_off", channel=chan, note=note, velocity=0, time=0)))
         msgs.sort(key=lambda x: (x[0], x[1]))
         prev = 0
-        for tick, _, msg in msgs:
-            msg.time = tick - prev; prev = tick
+        for tk, _, msg in msgs:
+            msg.time = tk - prev; prev = tk
             tr.append(msg)
 
     bass = [("n", k, d, m, v) for k, d, m, v, ch in ev["notes"] if ch == 0]
     bass += [("cc", k, cc, val) for k, cc, val in ev["cc"]]
     stabs = [("n", k, d, m, v) for k, d, m, v, ch in ev["notes"] if ch == 1]
     drums = [("n", k, 0.5, note, vel) for k, note, vel in ev["drums"]]
-    # pads in MIDI: one long note per contiguous breakdown region per top-3 peaks
     pads = []
     bb = ev["bearb"]; b0 = None
     for b in range(len(bb)+1):
@@ -274,13 +337,13 @@ def write_midi(ev, peaks, path):
     mid.save(path)
 
 # ---------------- run the album ----------------
-print(f"{'track':22s} {'bpm':>4s} {'len':>6s} {'bars':>5s} {'bd':>3s}  top pad periods (d)")
-for ticker, title, root in ALBUM:
-    rs = np.load(os.path.join(SCRATCH, f"r_{ticker}.npy"))
-    ev = compose(rs, root)
-    peaks = spectral_peaks(rs, root % 12)
-    dur = synth(ev, peaks, os.path.join(OUT, f"{title}.wav"))
-    write_midi(ev, peaks, os.path.join(OUT, f"{title}.mid"))
-    per = ", ".join(f"{p[0]:.0f}" for p in peaks[:3])
-    print(f"{title:22s} {ev['bpm']:4d} {int(dur//60)}:{int(dur%60):02d} {ev['NBAR']:5d} {ev['bearb'].sum():3d}  {per}")
-print("album written to", OUT)
+if __name__ == "__main__":
+    print(f"{'track':22s} {'style':>10s} {'bpm':>4s} {'len':>6s} {'bars':>5s} {'bd':>3s}")
+    for ticker, title, root, style in ALBUM:
+        rs = np.load(os.path.join(SCRATCH, f"r_{ticker}.npy"))
+        ev = compose(rs, root, style)
+        peaks = spectral_peaks(rs, root % 12)
+        dur = synth(ev, peaks, os.path.join(OUT, f"{title}.wav"))
+        write_midi(ev, peaks, os.path.join(OUT, f"{title}.mid"))
+        print(f"{title:22s} {style:>10s} {ev['bpm']:4d} {int(dur//60)}:{int(dur%60):02d} {ev['NBAR']:5d} {ev['bearb'].sum():3d}")
+    print("album written to", OUT)

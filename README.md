@@ -9,7 +9,14 @@ the market wrote the tracks; we chose the instruments.
 
 ▶ Start here: `album/01_Chipmaker.mp4` — the price chart drawing itself in sync
 with the music. Breakdowns shade in when the kick drops out; red dots flash on
-4-sigma days.
+4-sigma days. Every track has one.
+
+Each track carries the genre its statistics call for — the calm compounders get
+deep house and dub techno; the violent ones get trance and acid (see
+[LINER_NOTES.md](LINER_NOTES.md) for the genre map and the full audio legend).
+A complete mathematical specification of the pipeline — Wiener–Khinchin theory,
+estimators, the three samplers, and the sonification grammar as a measurable map —
+is in [`docs/technical_documentation.pdf`](docs/technical_documentation.pdf).
 
 ## The idea
 
@@ -33,8 +40,9 @@ with the music. Breakdowns shade in when the kick drops out; red dots flash on
 ## Repository layout
 
 ```
-album/            8 tracks: WAV demo masters + standard MIDI files + track 01 video
+album/            8 tracks: WAV demo masters + standard MIDI files + synced videos
 LINER_NOTES.md    the album commentary: what every sound means in the market
+docs/             technical_documentation.tex/.pdf — the full mathematical spec
 pipeline/
   spectral.py       Wiener–Khinchin / Welch / multitaper analysis, Fisher g-test, GPH
   melody*.py        direct sonifications of the spectrum and its history

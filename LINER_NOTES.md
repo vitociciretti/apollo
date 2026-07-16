@@ -20,21 +20,41 @@ the market wrote these tracks; we only chose the instruments.*
 | **The stabs (syncopated chords)** | Active weeks: stabs only fire when the underlying days actually moved. The groove's irregularity is the market's own irregularity. |
 | **Sharper, more detuned tone (timbre)** | Fat tails: rolling kurtosis morphs every voice from clean (calm, near-Gaussian regimes) to razor-edged (crash-prone regimes). Piano vs violin = thin tails vs fat tails. |
 | **The pads (swelling in breakdowns)** | The stock's own volatility spectrum. Each pad note is a statistically significant volatility cycle (Wiener–Khinchin theorem), transposed into the audible range and tuned to the track's key. The half-year and one-quarter cycles are the earnings calendar itself. |
-| **The tempo** | Annualized volatility. Calm compounders run at 122 BPM; the wild ones at 134. |
+| **The tempo** | Annualized volatility, anchored by each track's genre. Calm compounders run at 115–120 BPM (dub, deep house); the wild ones at 140 (trance, acid). |
 | **The key** | Each stock gets its own minor key — its identity across the album. |
 
 ## The tracks
 
 | # | Title | Key | BPM | The story |
 |---|---|---|---|---|
-| 01 | Chipmaker | F minor | 130 | From graphics cards to the AI singularity, with 2018, 2022 and the DeepSeek scare as breakdowns |
-| 02 | Cupertino | A minor | 123 | The steadiest groove on the record — a compounder's four-on-the-floor |
-| 03 | Redmond | D minor | 122 | The slowest BPM: lowest vol in the basket. Relentless |
-| 04 | PageRank | G minor | 123 | Search never crashed hard — few breakdowns, long runs |
-| 05 | Everything Store | C minor | 125 | 2014 doubt and the 2022 unwind as its two great silences |
-| 06 | Social Graph | B♭ minor | 127 | The longest track (IPO 2012): the 2018 and 2022 collapses are its architecture |
-| 07 | Stream | E minor | 131 | Qwikster, the 2022 subscriber shock — a track that keeps losing and finding its kick |
-| 08 | Ludicrous | B minor | 134 | The fastest BPM on the album. Obviously |
+| 01 | Chipmaker | F minor | 131 | **Peak-time techno.** From graphics cards to the AI singularity, with 2018, 2022 and the DeepSeek scare as breakdowns |
+| 02 | Cupertino | A minor | 117 | **Deep house.** The steadiest compounder gets the swung, unhurried groove |
+| 03 | Redmond | D minor | 115 | **Dub techno.** Lowest vol in the basket: spacious offbeat chords in long echo |
+| 04 | PageRank | G minor | 125 | **Progressive.** Long steady runs, arpeggios that never quite resolve |
+| 05 | Everything Store | C minor | 130 | **Warehouse.** Relentless logistics: driving, percussion-forward, pads stripped back |
+| 06 | Social Graph | B♭ minor | 127 | **Breaks.** The one that broke the four-on-the-floor (IPO 2012; 2018 and 2022 are its architecture) |
+| 07 | Stream | E minor | 140 | **Uplifting trance.** Binge arcs, supersaw arps, the biggest builds on the record |
+| 08 | Ludicrous | B minor | 140 | **Acid.** Highest vol, 303 squelch, accents fired by the big days. Obviously |
+
+Each genre is matched to the statistics: low-volatility compounders get the patient
+grooves (deep house, dub), the high-volatility names get the aggressive ones
+(trance, acid), and the genre's BPM anchor is then fine-tuned by each stock's
+annualized vol.
+
+## The videos — visual legend
+
+Every track has a synced video: the price chart draws itself as the music plays
+(~63 trading days per second of audio).
+
+| On screen | Meaning | You hear |
+|---|---|---|
+| Blue line | growth of $1, log scale | the bassline's pitch (level vs trend) |
+| Green lower panel | 21-day rolling volatility | filter brightness, kick punch |
+| Red shaded regions | deep-drawdown regimes | the breakdown (kick drops out) |
+| **Red dot** | **a single >4σ trading day** — earnings shock, flash crash | the crash cymbal, same instant |
+| "BREAKDOWN" flag | the playhead is inside a bear regime | Phrygian mode, pads swelling |
 
 *Composed by an LSTM's ancestors: prices → log-returns → spectra, regimes and moments → sound.
-Pipeline: Python/NumPy/SciPy synthesis, MIDI export for production. All source at github.com/vitociciretti/apollo.*
+Pipeline: Python/NumPy/SciPy synthesis, MIDI export for production; data: Yahoo Finance
+adjusted closes. Full mathematical specification in `docs/technical_documentation.pdf`.
+All source at github.com/vitociciretti/apollo.*

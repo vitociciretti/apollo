@@ -1,0 +1,439 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{assumption}[theorem]{Assumption}
+
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\ind}{\mathbf{1}}
+
+\title{\textbf{APOLLO}\\[2pt]\large A Formal Specification of the Market--to--Music Pipeline:\\
+Spectral Analysis, Generative Sampling, and the Sonification Grammar of \emph{TECH(NO) US}}
+\author{Vito Ciciretti\thanks{Pipeline implementation: \texttt{github.com/vitociciretti/apollo}. This document specifies the mathematics implemented in \texttt{pipeline/}.}}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We give a complete mathematical specification of a pipeline that maps a financial
+price history to a musical composition. Part~I establishes the second-order theory:
+the Wiener--Khinchin representation of the power spectral density (PSD), its
+estimators (periodogram, Welch, Blackman--Tukey, Thomson multitaper), Fisher's exact
+test for hidden periodicities, and the Geweke--Porter-Hudak (GPH) estimator of long
+memory. Part~II specifies three generative models admitting exact or approximate
+sampling from the estimated law: phase-randomized surrogates, GJR-GARCH with
+skew-$t$ innovations, and a recurrent conditional-density network. Part~III defines
+the sonification grammar: a measurable map from the path of the (real or sampled)
+return process to a discrete musical event set and thence to a pressure waveform,
+under which distinct moments of the conditional distribution are carried by
+perceptually orthogonal audio dimensions --- location by pitch, scale by loudness,
+and tail mass by timbre.
+\end{abstract}
+
+\tableofcontents
+
+%=====================================================================
+\section{Data and notation}
+
+Let $P_t>0$, $t=0,1,\dots,n$, denote the dividend- and split-adjusted daily closing
+price of an asset on trading-day grid $t$. Define log-returns
+\begin{equation}
+r_t \coloneqq \log P_t - \log P_{t-1}, \qquad t=1,\dots,n .
+\end{equation}
+Throughout, $\hat\mu \coloneqq n^{-1}\sum_t r_t$, $\hat s^2 \coloneqq
+n^{-1}\sum_t (r_t-\hat\mu)^2$, and the \emph{volatility proxy} is $a_t \coloneqq
+|r_t|$. Annualization uses the convention $\sigma_{\mathrm{ann}} = \hat s\sqrt{252}$.
+The cumulative log-price is $X_t \coloneqq \sum_{u\le t} r_u$; the running maximum
+$M_t \coloneqq \max_{u\le t} X_u$; and the \emph{drawdown process}
+\begin{equation}
+D_t \coloneqq M_t - X_t \;\ge 0 .
+\label{eq:drawdown}
+\end{equation}
+
+\begin{assumption}\label{ass:stat}
+$(r_t)$ is covariance-stationary with autocovariance
+$\gamma(h)=\Cov(r_t,r_{t+h})$ and $\sum_h |\gamma(h)|$ possibly divergent (long
+memory is admitted for $a_t$; see \S\ref{sec:longmem}).
+\end{assumption}
+
+%=====================================================================
+\section{Second-order structure and the Wiener--Khinchin theorem}
+
+\begin{theorem}[Wiener--Khinchin]\label{thm:wk}
+Let $(Y_t)_{t\in\mathbb{Z}}$ be covariance-stationary with autocovariance
+$\gamma(\cdot)$. There exists a finite measure $F$ on $[-1/2,1/2]$ (the spectral
+measure) with
+\begin{equation}
+\gamma(h) = \int_{-1/2}^{1/2} e^{2\pi i f h}\, dF(f), \qquad h\in\mathbb{Z}.
+\end{equation}
+If $\sum_h |\gamma(h)|<\infty$, $F$ is absolutely continuous with density
+\begin{equation}
+S(f) \;=\; \sum_{h=-\infty}^{\infty} \gamma(h)\, e^{-2\pi i f h},
+\qquad f \in [-1/2, 1/2],
+\label{eq:wk}
+\end{equation}
+the \emph{power spectral density}, and $\gamma(h)=\int e^{2\pi ifh}S(f)\,df$; in
+particular $\Var(Y_t)=\int_{-1/2}^{1/2} S(f)\,df$.
+\end{theorem}
+
+Equation \eqref{eq:wk} is the load-bearing identity of the project: \emph{the PSD is
+the Fourier transform of the autocovariance}, hence estimating $S$ and estimating
+$\gamma$ are the same problem, and any generative model matching $S$ matches all
+second-order properties of the process.
+
+\subsection{Estimators implemented}\label{sec:estimators}
+
+Write $Y_t$ for the demeaned series of interest ($r_t-\hat\mu$ or $a_t-\bar a$).
+
+\paragraph{(i) Periodogram.} With the DFT
+$d(f_j)=\sum_{t=1}^{n} Y_t e^{-2\pi i f_j t}$ at Fourier frequencies
+$f_j=j/n$, $j=1,\dots,m=\lfloor (n-1)/2\rfloor$,
+\begin{equation}
+I(f_j) \;=\; \frac{1}{n}\,\bigl|d(f_j)\bigr|^2 .
+\end{equation}
+$I$ is asymptotically unbiased for $S$ but inconsistent
+($I(f_j)/S(f_j)\xrightarrow{d}\tfrac12\chi^2_2$, variance not vanishing), so it is
+used only where its \emph{exact distribution} is exploited (Fisher's test,
+\S\ref{sec:fisher}; GPH, \S\ref{sec:longmem}).
+
+\paragraph{(ii) Welch.} Split $Y$ into $K$ segments of length $L$ (implementation:
+$L=512$, 75\%\ overlap), taper each with a Hann window $w$, and average the
+windowed periodograms:
+\begin{equation}
+\hat S_W(f) = \frac{1}{K}\sum_{k=1}^{K} \frac{1}{\sum_t w_t^2}
+\Bigl|\sum_{t=1}^{L} w_t\, Y_{t+o_k}\, e^{-2\pi i f t}\Bigr|^2 .
+\end{equation}
+Variance decays like $1/K$ at the cost of frequency resolution $\asymp 1/L$.
+
+\paragraph{(iii) Blackman--Tukey (the Wiener--Khinchin route).} Estimate
+$\hat\gamma(h)=n^{-1}\sum_{t=1}^{n-h} Y_t Y_{t+h}$ for $|h|\le L$ (implementation:
+$L=512$), damp with the Tukey--Hanning lag window
+$\lambda(h)=\tfrac12\bigl(1+\cos\tfrac{\pi h}{L}\bigr)$, and transform:
+\begin{equation}
+\hat S_{BT}(f) = \sum_{|h|\le L} \lambda(h)\,\hat\gamma(h)\, e^{-2\pi i f h}.
+\end{equation}
+This estimator is Theorem~\ref{thm:wk} made operational; agreement of
+$\hat S_{BT}$ with $\hat S_W$ is used as an internal consistency check.
+
+\paragraph{(iv) Thomson multitaper.} Let $v^{(0)},\dots,v^{(K-1)}$ be the discrete
+prolate spheroidal sequences (DPSS) of length $n$ and time--bandwidth product
+$NW$ (implementation: $NW=4$, $K=7$), the orthonormal maximizers of spectral
+concentration in $[-W,W]$. The estimator
+\begin{equation}
+\hat S_{MT}(f) = \frac{1}{K}\sum_{k=0}^{K-1}
+\Bigl| \sum_{t=1}^{n} v^{(k)}_t\, Y_t\, e^{-2\pi i f t} \Bigr|^2
+\end{equation}
+has $\approx 2K$ equivalent degrees of freedom and minimal broadband leakage,
+making it the estimator of record for detecting weak spectral \emph{lines}
+against a colored background --- precisely the regime of volatility spectra.
+
+\subsection{Fisher's exact test for hidden periodicities}\label{sec:fisher}
+
+Under $H_0\colon r_t \overset{iid}{\sim}\mathcal N(\mu,\sigma^2)$, the normalized
+ordinates $I(f_j)/\sum_{k}I(f_k)$ are exchangeable and Fisher's statistic
+\begin{equation}
+g \;=\; \frac{\max_{1\le j\le m} I(f_j)}{\sum_{j=1}^{m} I(f_j)}
+\end{equation}
+has the exact null law
+\begin{equation}
+\Pr(g > x) \;=\; \sum_{k=1}^{\lfloor 1/x \rfloor} (-1)^{k-1}\binom{m}{k}(1-kx)^{m-1}.
+\label{eq:fisher}
+\end{equation}
+A per-ordinate 5\%\ false-alarm level (Bonferroni across $m$ ordinates) is
+$x^\star = 1-(0.05/m)^{1/(m-1)}$.
+
+\paragraph{Empirical result (NVDA, 2010--2026, $n=4156$).} For $r_t$:
+$g$ attains $p=0.34$ and \emph{zero} ordinates clear $x^\star$ --- the return
+spectrum is statistically flat (white noise), consistent with the martingale
+hypothesis. For $a_t=|r_t|$: $p<10^{-4}$ with eight ordinates above the
+false-alarm level, all at low frequency, including periods $\approx 63$ and
+$\approx 126$ trading days --- the quarterly and semi-annual earnings-calendar
+harmonics.
+
+\begin{remark}
+Once long memory in $a_t$ is established (\S\ref{sec:longmem}) the white-noise
+null is weak for individual low-frequency peaks: power concentration under a
+$1/f$-shaped spectrum inflates \eqref{eq:fisher} rejections. The robust finding
+is the long-memory slope plus the calendar harmonics, not any single line.
+\end{remark}
+
+\subsection{Long memory: fractional integration and GPH}\label{sec:longmem}
+
+\begin{definition}
+$(Y_t)$ has long memory with parameter $d\in(0,\tfrac12)$ if
+$S(f)\sim c\, f^{-2d}$ as $f\downarrow 0$, equivalently
+$\gamma(h)\sim c'\, h^{2d-1}$ as $h\to\infty$.
+\end{definition}
+
+The Geweke--Porter-Hudak estimator regresses log-periodogram ordinates on the
+canonical regressor. With $\lambda_j = 2\pi f_j$ and bandwidth
+$m^\ast=\lfloor n^{0.6}\rfloor$,
+\begin{equation}
+\log I(f_j) \;=\; c \;-\; d\,\log\!\bigl(4\sin^2(\lambda_j/2)\bigr) \;+\;
+\varepsilon_j, \qquad j=1,\dots,m^\ast,
+\end{equation}
+estimated by OLS; asymptotically
+$\hat d \approx \mathcal N\!\bigl(d,\; \pi^2/(24\,m^\ast)\bigr)$, i.e.\
+$\mathrm{se}(\hat d)=\pi/\sqrt{24\,m^\ast}$.
+
+\paragraph{Empirical result.} For NVDA $a_t$: $\hat d = 0.397$,
+$\mathrm{se}=0.053$ ($t=7.5$), squarely in the FIGARCH range documented for
+equity volatility. For $r_t$ the low-frequency log--log slope is $-0.04$
+(white noise $=0$).
+
+%=====================================================================
+\section{Generative models: sampling from the estimated law}
+
+The composition engine (\S\ref{sec:grammar}) consumes an arbitrary path
+$(r^\ast_t)_{t\le N}$; three samplers of increasing structural fidelity are
+implemented.
+
+\subsection{Phase randomization (maximum entropy given the ACF)}\label{sec:surrogate}
+
+Let $A_j = |{\textstyle\sum_t} (a_t-\bar a) e^{-2\pi i jt/n}|$ be the empirical
+amplitude spectrum, interpolated to target length $N$ and rescaled by
+$\sqrt{N/n}$. Draw $\varphi_j \overset{iid}{\sim} U[0,2\pi)$, $\varphi_0=0$, and set
+\begin{equation}
+a^\ast_t \;=\; \bar a + \frac{1}{N}\sum_j A_j\, e^{i\varphi_j} e^{2\pi i jt/N},
+\qquad a^\ast_t \leftarrow \max(a^\ast_t, 0).
+\end{equation}
+By construction $(a^\ast_t)$ has (up to interpolation error) the sample
+autocovariance of $(a_t)$; among all processes with that autocovariance the
+Gaussian one generated here maximizes entropy. This is
+Theorem~\ref{thm:wk} used as a \emph{sampler}: the PSD is a complete generative
+model for the second-order law.
+
+\subsection{GJR-GARCH$(1,1,1)$ with skew-$t$ innovations}
+
+\begin{align}
+r_t &= \mu + \sigma_t z_t, \qquad z_t \overset{iid}{\sim}
+\mathrm{skew}\text{-}t(\eta,\lambda),\\
+\sigma^2_t &= \omega + \bigl(\alpha + \gamma\,\ind\{r_{t-1}<\mu\}\bigr)
+\varepsilon_{t-1}^2 + \beta\,\sigma^2_{t-1},
+\qquad \varepsilon_t = r_t-\mu,
+\end{align}
+estimated by maximum likelihood. The leverage term $\gamma>0$ generates the
+volatility asymmetry that the linear samplers of \S\ref{sec:surrogate} cannot.
+Fitted on NVDA ($\times 100$ scale): $\hat\mu=0.116$, $\hat\omega=0.073$,
+$\hat\alpha=0.030$, $\hat\gamma=0.070$, $\hat\beta=0.932$, $\hat\eta=4.57$,
+$\hat\lambda=-0.02$; persistence
+$\hat\alpha+\hat\gamma/2+\hat\beta \approx 0.997$.
+
+\subsection{Recurrent conditional-density model}\label{sec:rnn}
+
+Let $x_t = \bigl(r_t/\hat s,\; \log(|r_t|/\hat s + 10^{-3})\bigr)\in\R^2$. A
+single-layer LSTM $h_t = \mathrm{LSTM}(x_t, h_{t-1})\in\R^{64}$ feeds an affine
+head producing the parameters of the \emph{conditional law of tomorrow's
+standardized return}:
+\begin{equation}
+\mu_t = 0.05\tanh(w_\mu^\top h_t),\qquad
+\sigma_t = \exp\bigl(\mathrm{clip}(w_\sigma^\top h_t, [-4,2])\bigr),\qquad
+\nu = 2.05 + \mathrm{softplus}(\theta_\nu),
+\end{equation}
+\begin{equation}
+\frac{r_{t+1}}{\hat s}\,\Big|\, \mathcal F_t \;\sim\; \mu_t + \sigma_t\, T_\nu ,
+\end{equation}
+with $T_\nu$ standard Student-$t$. Training minimizes the exact negative
+log-likelihood
+\begin{equation}
+-\ell = -\log\Gamma\!\Bigl(\tfrac{\nu+1}{2}\Bigr) + \log\Gamma\!\Bigl(\tfrac{\nu}{2}\Bigr)
++ \tfrac12\log(\pi\nu) + \log\sigma_t
++ \frac{\nu+1}{2}\,\log\!\Bigl(1+\frac{z_t^2}{\nu}\Bigr),
+\quad z_t = \frac{r_{t+1}/\hat s - \mu_t}{\sigma_t},
+\end{equation}
+over overlapping windows (length 256, stride 16, 32-step burn-in excluded from
+the loss), Adam with gradient clipping, model selection by validation NLL on a
+15\%\ holdout. Sampling is autoregressive: the hidden state is warmed on the
+final 252 real observations, then $r^\ast_{t+1} = \hat s(\mu_t + \sigma_t
+T_\nu)$ is drawn, clipped at $8$ standard units, and fed back through $x_{t+1}$.
+
+\paragraph{Diagnostics (real vs.\ sampled, $N=4608$).}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & NVDA & LSTM sample\\
+\midrule
+tail d.o.f. & $4.57$ (GARCH MLE) & $4.24$ (learned)\\
+excess kurtosis basis & $9.8$ & $10.1$\\
+$\mathrm{ACF}_{|r|}(1)$ & $0.171$ & $0.131$\\
+$\mathrm{ACF}_{|r|}(21)$ & $0.092$ & $0.089$\\
+GPH $\hat d$ on $|r|$ & $0.397$ & $0.516$\\
+annualized vol & $45.2\%$ & $53.4\%$\\
+mean daily return & $+0.148\%$ & $+0.044\%$\\
+\bottomrule
+\end{tabular}
+\end{center}
+Fat tails, volatility clustering and long memory are recovered from raw
+likelihood training; the conditional mean is (correctly) shrunk toward zero,
+which materially darkens the sampled paths' drawdown structure.
+
+%=====================================================================
+\section{The sonification grammar}\label{sec:grammar}
+
+\subsection{Grids and state processes}
+
+Fix beats per minute $B$ and the sixteenth-note duration
+$\tau \coloneqq \tfrac{60}{4B}$ seconds. Days are binned $\delta$ per sixteenth,
+$\delta = \max\bigl(2, \mathrm{round}(n/1536)\bigr)$, giving
+$K = 16\lfloor n/(16\delta)\rfloor$ sixteenth-notes and $K/16$ bars. Define on
+the day grid: rolling volatility $v_t = \mathrm{sd}(r_{t-20:t})\sqrt{252}$;
+rolling kurtosis $\kappa_t = \widehat{\mathrm{kurt}}(r_{t-62:t})$; trend z-score
+\begin{equation}
+z_t = \frac{X_t - \mathrm{MA}_{252}(X)_t}{\mathrm{sd}_{252}(X)_t};
+\end{equation}
+and the \emph{regime indicator} from the drawdown \eqref{eq:drawdown},
+\begin{equation}
+\beta_t = \ind\bigl\{ D_t > Q_{0.78}(D) \bigr\},
+\label{eq:regime}
+\end{equation}
+i.e.\ breakdown $\equiv$ worst-quartile drawdown \emph{of the path's own
+distribution} (adaptive by construction: any sampled world keeps
+$\approx 22\%$ breakdown time). Bar-level states $(z_b, v_b, \kappa_b, \beta_b)$
+evaluate these at each bar's final day; $v_b$ is min--max normalized to
+$\tilde v_b \in[0,1]$ and $\kappa_b$ is mapped to its percentile rank
+$\tilde\kappa_b\in[0,1]$.
+
+\subsection{Pitch: scale quantization}
+
+Let the key root be pitch class $\rho$ (per track, Table~\ref{tab:album}) and
+octave-anchored MIDI root $R$. Modes are
+$\mathcal S_{\text{aeol}} = \{0,2,3,5,7,8,10\}$ and
+$\mathcal S_{\text{phry}} = \{0,1,3,5,7,8,10\}$, selected by
+$\beta$: $\mathcal S_b = \mathcal S_{\text{phry}}$ if $\beta_b=1$ else
+$\mathcal S_{\text{aeol}}$. The harmony degree per bar is
+\begin{equation}
+\deg_b \;=\;
+\begin{cases}
+5 & z_b < -1,\\
+0 & -1 \le z_b \le 0.5,\\
+3 & z_b > 0.5,
+\end{cases}
+\qquad
+m_b = R + \mathcal S_b[\deg_b] .
+\end{equation}
+Pitch is thus a quantized functional of price-versus-trend; the mode (and hence
+the semitone content) is a functional of the drawdown regime.
+
+\subsection{Event maps}
+
+For sixteenth $k$ in bar $b$ with day window $W_k = [k\delta, (k+1)\delta)$:
+\begin{align*}
+\textbf{kick:}\quad & k \bmod 4 = 0 \;\wedge\; \beta_b = 0
+&& \text{velocity } \propto 0.85 + 0.15\,\tilde v_b,\\
+\textbf{bass note:}\quad & \beta_b = 0,\ \text{pitch } m_b + 12\cdot
+\ind\{\max_{t\in W_k}|r_t| > \hat s \wedge k\bmod4=2\},
+&& \text{off-beat accent } \times 1.15,\\
+\textbf{stab (chord):}\quad & k\bmod16 \in \{3,7,10,14\} \;\wedge\;
+\textstyle\sum_{t \in W_k}|r_t| > \delta\,\overline{|r|},
+&& \text{triad on } \deg_b,\\
+\textbf{clap roll:}\quad & \beta_b = 1 \wedge \beta_{b+1} = 0
+&& \text{velocity ramp in } k\bmod 16,\\
+\textbf{crash:}\quad & \max_{t\in W_k} |r_t| > 4\hat s
+\;\vee\; (\text{first } k \text{ of a recovery bar}). &&
+\end{align*}
+The filter-cutoff automation (MIDI CC74; audio-domain lowpass corner) is
+\begin{equation}
+c_b = 160 + 2800\,\tilde v_b + 500\,\tilde\kappa_b \ \ \text{Hz},
+\end{equation}
+so the audible brightness of the bass \emph{is} the volatility curve.
+
+\subsection{Timbre as a tail functional}
+
+Each melodic voice is a detuned additive synth
+\begin{equation}
+y(t) = \sum_{\pm} \sum_{h=1}^{H} \frac{\alpha_h}{h}
+\sin\!\bigl(2\pi h f (1\pm\epsilon) t\bigr), \qquad
+\alpha_h = \tilde\kappa^{\,\ind\{h\ge2\}},\quad
+\epsilon = 0.004 + 0.006\,\tilde\kappa,
+\end{equation}
+band-limited at the filter corner: at $\tilde\kappa=0$ a pure sine (thin-tailed,
+quasi-Gaussian regime), at $\tilde\kappa=1$ a bright sawtooth (crash-prone
+regime). Thus the fourth moment is carried by harmonic content --- the
+``piano vs.\ violin'' axis --- while the second moment is carried by loudness
+and the first by pitch: three perceptually orthogonal channels for three moments.
+
+\subsection{Pads: the spectrum made audible}
+
+For each significant volatility-spectrum peak at frequency $f_0$ (period
+$1/f_0 \in [40,600]$ days), the band-limited analytic envelope is extracted by
+zero-phase Butterworth bandpass $\mathcal B_{[f_0/1.35,\,1.35 f_0]}$ and the
+Hilbert transform $\mathcal H$:
+\begin{equation}
+E_{f_0}(t) = \mathrm{smooth}\,\bigl|\,(\mathrm{id} + i\mathcal H)\,
+\mathcal B_{[f_0/1.35,\,1.35f_0]}\,(a - \bar a)\,(t)\bigr| ,
+\end{equation}
+i.e.\ the instantaneous amplitude of that volatility cycle through time. The pad
+voice sounds at the peak frequency transposed into the audible range,
+$f_{\mathrm{aud}} = 2.2\times10^{5} f_0$ Hz, quantized to the track's scale
+lattice $\{440\cdot2^{(m-69)/12}\colon m \bmod 12 \in \rho + \mathcal S\}$,
+amplitude-modulated by $E_{f_0}$, and gated by the smoothed regime indicator
+\eqref{eq:regime} so the spectrum is heard precisely when the beat is absent.
+
+\subsection{Mixing operators}
+
+Sidechain compression is the multiplicative envelope
+$g(t) = 1 - 0.55\, e^{-(t-t_{\mathrm{kick}})/0.085}$ applied to all non-drum
+buses after each kick onset; spatialization applies a dotted-eighth
+($3\tau$) cross-feedback delay to the $>\!1.2$ kHz band; mastering is a 25 Hz
+DC-blocking highpass and peak normalization (no nonlinear stage --- an earlier
+$\tanh$ soft-clipper was removed as it injected broadband intermodulation
+audible as background noise).
+
+%=====================================================================
+\section{Album parameterization}
+
+Tempo is an affine function of annualized volatility,
+$B = \mathrm{clip}\bigl(\lfloor 120 + 40(\sigma_{\mathrm{ann}} - 0.20)\rfloor,\,
+122,\, 134\bigr)$; each asset receives a fixed key.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llccc}
+\toprule
+\# & Title & Key & $\sigma_{\mathrm{ann}}$ & BPM \\
+\midrule
+01 & Chipmaker & F min & 45\% & 130\\
+02 & Cupertino & A min & 28\% & 123\\
+03 & Redmond & D min & 26\% & 122\\
+04 & PageRank & G min & 28\% & 123\\
+05 & Everything Store & C min & 33\% & 125\\
+06 & Social Graph & B$\flat$ min & 40\% & 127\\
+07 & Stream & E min & 49\% & 131\\
+08 & Ludicrous & B min & 57\% & 134\\
+\bottomrule
+\end{tabular}
+\caption{\emph{TECH(NO) US}: per-track parameters derived from each asset's history.}
+\label{tab:album}
+\end{table}
+
+\section{Video synchronization}
+
+The video frame at time $s\in[0, K\tau]$ displays days
+$1,\dots,\lfloor sK\delta/(K\tau)\rfloor = \lfloor s\delta/\tau \rfloor$: the
+map from audio time to market time is linear with slope $\delta/\tau$ days per
+second ($\approx 63$ trading days/s at $B=128$, $\delta=3$). Overlays are the
+regime shading $\{\beta_t=1\}$ (visible iff the playhead has passed the region's
+onset), the running price $e^{X_t}$ on a log axis, $v_t$ in a lower panel, and
+markers at $\{t: |r_t|>4\hat s\}$ --- the visual twins of the breakdown, the
+filter curve, and the crash cymbal respectively.
+
+\section*{Caveat}
+A flat return spectrum (\S\ref{sec:fisher}) is exactly the statement that the
+composition carries no linear predictive content. Apollo is prophecy only in the
+sense that mattered at Delphi: accurate, resonant, and of no use for trading.
+
+\end{document}
