@@ -1,7 +1,7 @@
 # TECH(NO) US
 
 *Eight American technology stocks, 2010–2026 — plus a duet on their correlation
-and a closer sung by the pipeline's own neural network. Every note, every drum
+and a closer played from the pipeline's own neural-network training run. Every note, every drum
 hit, every breakdown is computed from the data. Nothing is composed by hand —
 the market wrote these tracks; we only chose the instruments.*
 
@@ -28,7 +28,7 @@ the market wrote these tracks; we only chose the instruments.*
 | **Percussion density (hats, 16th-note perc)** | Trading volume. Per-bar volume percentile drives the hat level and opens the 16th-note percussion ladder: heavy tape = busy pits = busy hats. |
 | **Drum fills (last beat of a bar)** | Earnings-volume spikes: a single day's volume jumping far above its 21-day baseline earns that bar a fill. |
 | **The key lifting to the relative major** | A strong bull regime: when an entire section trades more than one standard deviation above its 252-day trend, melody and stabs modulate from the home minor to its relative major — and drop back when the regime ends. |
-| **The choir** | A vocoded synthetic voice singing the data's story: melodies pitch-mapped from the market itself (and, on the closer, from the neural composer's own loss curve), layered five voices deep and vocoded onto a synth carrier. Tracks 01, 07, 09 sing in English; track 10 in Latin. |
+| **The cantor lead (track 10)** | On the closer, a featured supersaw lead sings the neural composer's own validation-loss curve, phrase by phrase, descending onto the tonic F as the model converges. The album is fully instrumental — the data needs no words. |
 
 ## The tracks
 
@@ -43,7 +43,7 @@ the market wrote these tracks; we only chose the instruments.*
 | 07 | Stream | E minor | 140 | **Uplifting trance.** Binge arcs, supersaw arps, the biggest builds on the record |
 | 08 | Ludicrous | B minor | 140 | **Acid.** Highest vol, 303 squelch, accents fired by the big days. Obviously |
 | 09 | Correlation One | F minor | 126 | **Techno duet.** Two stocks, one groove: the chipmaker plays bass, Cupertino plays lead, and their rolling 63-day correlation writes the harmony. When correlation spikes toward 1 — which is what markets do in a crisis — the two voices lock into unison; in calm, decoupled markets they drift apart into tension intervals. Breakdowns fire only when both are in deep drawdown at once. You are listening to diversification live and die |
-| 10 | Descensus Gradientis | F minor | 145 | **Latin-choral hard dance — the gradient-descent liturgy.** The closer, and the confession: this one is built not from a stock but from the 80-epoch training history of the album's own neural composer. High validation loss sounds as dissonant clusters (♭2, tritone); convergence resolves them to clean F minor. Every new best-validation epoch fires an impact, the learning-rate decays at epochs 30 and 60 are the section transitions, the train/val gap detunes the pads — and a vocoded Latin choir sings the loss curve itself, phrase by phrase (*Descende gradiens… Converge ad minimum… Nox est stochastica*), descending onto the tonic F as the model converges. Gradient descent, as liturgy |
+| 10 | Descensus Gradientis | F minor | 145 | **Hard-dance liturgy — gradient descent as ritual.** The closer, and the confession: this one is built not from a stock but from the 80-epoch training history of the album's own neural composer. High validation loss sounds as dissonant clusters (♭2, tritone); convergence resolves them to clean F minor. Every new best-validation epoch fires an impact, the learning-rate decays at epochs 30 and 60 are the section transitions, the train/val gap detunes the pads — and a featured cantor lead plays the loss curve itself, phrase by phrase, descending onto the tonic F as the model converges |
 
 Each genre is matched to the statistics: low-volatility compounders get the patient
 grooves (deep house, dub), the high-volatility names get the aggressive ones
@@ -59,7 +59,7 @@ centre, the price chart drawing itself as the music plays (~63 trading days per
 second of audio); on the right, the album's neural composer in training — the
 LSTM's train/validation loss curves descending. Track 10's video drops the price
 panel entirely: the **descensus video** is the loss curve descending in real
-time, one epoch per bar, the visual twin of what the choir is singing.
+time, one epoch per bar, the visual twin of what the cantor lead is playing.
 
 | On screen | Meaning | You hear |
 |---|---|---|
@@ -69,7 +69,7 @@ time, one epoch per bar, the visual twin of what the choir is singing.
 | **Red dot** | **a single >4σ trading day** — earnings shock, flash crash | the crash cymbal, same instant |
 | "BREAKDOWN" flag | the playhead is inside a bear regime | Phrygian mode, pads swelling |
 | Julia set (left panel) | the regime as a fractal: its parameter tracks vol + trend | calm regimes = connected, rounded sets; wild ones shatter |
-| Loss curves (right panel / track 10) | the LSTM composer learning: train + validation NLL per epoch | on track 10, the choir's melody — the sung descent, note for note |
+| Loss curves (right panel / track 10) | the LSTM composer learning: train + validation NLL per epoch | on track 10, the cantor lead's melody — the descent, note for note |
 
 *Composed by an LSTM's ancestors: prices → log-returns → spectra, regimes and moments → sound.
 Pipeline: Python/NumPy/SciPy synthesis, MIDI export for production; data: Yahoo Finance

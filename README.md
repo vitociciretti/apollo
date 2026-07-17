@@ -50,11 +50,12 @@ diminution in high vol, augmentation in calm — the market picks the variation.
 `volume_perc.py` opens a **trading-volume** channel: per-bar volume percentile
 drives percussion density, and earnings-volume spikes trigger drum fills.
 Sections that are bull end-to-end (z > 1 vs the 252-day trend) **modulate to
-the relative major**. `choir.py` adds a singing voice: TTS pitch-mapped through
-a phase vocoder onto data-derived melodies, stacked five voices deep and
-vocoded onto a synth carrier — English narrations on tracks 01/07/09 and the
-Latin liturgy of track 10, *Descensus Gradientis*, whose melody is the LSTM's
-own training-loss curve (`descensus.py`). Finally `transformer_gen.py` adds a
+the relative major**. The released album is **fully instrumental**: the closer
+*Descensus Gradientis* features a cantor supersaw lead playing the LSTM's own
+training-loss curve, phrase by phrase, down to the tonic (`descensus.py`).
+(`choir.py`/`vocals.py` — a vocoded-choir system that can sing the same
+melodies — remain in the pipeline for experimentation but are not used on the
+released masters.) Finally `transformer_gen.py` adds a
 **joint 8-ticker decoder-only transformer** sampler; its fidelity scorecard vs
 the real series and the LSTM baseline is in
 [`pipeline/transformer_scorecard.md`](pipeline/transformer_scorecard.md).
@@ -76,8 +77,8 @@ pipeline/
   regime.py         v4 form: vol change-points + drawdown regimes -> sections
   motif.py          v4 melody: per-stock theme + development operators
   volume_perc.py    v4 volume channel: percussion density + earnings fills
-  choir.py          v4 voice: TTS -> phase-vocoder pitch-mapping -> stacked vocoder
-  vocals.py         choir passes for tracks 01/07/09 (lyrics in lyrics.md)
+  choir.py          vocoded-choir system (not used on released masters)
+  vocals.py         choir passes for 01/07/09 (kept for experimentation; unused)
   descensus.py      track 10: the LSTM's training history as Latin-choral hard dance
   transformer_gen.py joint 8-ticker transformer sampler (see transformer_scorecard.md)
   make_video.py     price-evolution video synced to a track

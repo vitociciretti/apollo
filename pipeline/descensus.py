@@ -131,24 +131,39 @@ PLACE = [  # (phrase idx, at bar, epoch window, n notes, end on tonic)
     (4, INTRO+EP+4, (72, 80), 7, True),   # outro: "Nox est stochastica" -> F
 ]
 
+VOICE = "--voice" in sys.argv          # default: instrumental (no vocals)
+
+def saw_melody(mel):
+    """the loss-curve melody on a detuned supersaw lead — the instrumental cantor"""
+    parts = [synths.lead_note("trance", m, d*1.9, 0.8, 2600) for m, d in mel]
+    n = int(sum(d for _, d in mel)*SR) + SR          # +1s for the last release tail
+    y = np.zeros(n)
+    t = 0.0
+    for (m, d), p in zip(mel, parts):
+        a = int(t*SR); e_ = min(a + len(p), n)
+        y[a:e_] += p[:e_ - a]
+        t += d
+    return y
+
 voice = np.zeros(total)
 placements = []
 for i, (ph, at_bar, (e0, e1), nn, endt) in enumerate(PLACE):
     mel = curve_melody(e0, e1, nn, beats=2.0, end_tonic=endt)
-    y = choirlib.choir(LATIN[ph], mel, seed=31 + 7*i)
+    y = choirlib.choir(LATIN[ph], mel, seed=31 + 7*i) if VOICE else saw_melody(mel)
     a = int(at_bar*BAR*SR); e_ = min(a + len(y), total)
     voice[a:e_] += y[:e_ - a]
-    placements.append((LATIN[ph], at_bar*BAR,
+    placements.append((LATIN[ph] if VOICE else f"lead {i}", at_bar*BAR,
                        "-".join(str(m) for m, _ in mel)))
 
-# ooh sustains: 'oo' opens the intro, 'ah' closes the converged outro
+# sustains: open the intro, close the converged outro (choir if VOICE, else pad)
 for (bar0, nb, chord, vowel, sd) in (
         (0.5,        INTRO - 1,  (CROOT, CROOT+3, CROOT+7),  "oo", 51),
         (INTRO+EP+1, OUTRO - 2,  (CROOT, CROOT+7, CROOT+12), "ah", 61)):
     dur = nb*BAR
     pad = None
     for j, note in enumerate(chord):
-        y = choirlib.ooh([(note, dur)], vowel=vowel, seed=sd + 3*j)
+        y = choirlib.ooh([(note, dur)], vowel=vowel, seed=sd + 3*j) if VOICE else \
+            synths.lead_note("trance", note, dur, 0.6, 1400)
         pad = y if pad is None else pad[:len(y)] + y[:len(pad)]
     pad *= 0.9/max(np.abs(pad).max(), 1e-9)
     a = int(bar0*BAR*SR); e_ = min(a + len(pad), total)
