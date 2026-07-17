@@ -2,6 +2,9 @@
 Rolling 63d correlation controls harmony: high rho -> unison/octave (voices lock),
 mid rho -> consonant intervals (3rd/5th), low rho -> tension intervals (2nds/tritone).
 Breakdown = JOINT drawdown (both in worst quartile). You hear diversification die.
+Rendered with the dedicated "duet" voice bank (deep 38 Hz sub kick, dark hats,
+FM ratio-3 bass, glassy sine lead, chorus+reverb+pingpong bus) so the closer
+does not read as a clone of 01_Chipmaker's techno kit.
 """
 import numpy as np, os
 from techno_album import (STYLES, PHRYG, AEOL, midi2hz, roll, _kurt,
@@ -24,7 +27,7 @@ def rolling_corr(a, b, w):
     return np.nan_to_num(out)
 
 def compose_duet(r1, r2, root):
-    st = dict(STYLES["techno"]); st["stabs"] = (3, 7, 10, 14)
+    st = dict(STYLES["techno"]); st["stabs"] = (3, 7, 10, 14); st["pad"] = 1.2
     n = len(r1)
     dp16 = max(2, round(n/1536))
     N16 = (n//dp16)//16*16; NBAR = N16//16
@@ -55,7 +58,7 @@ def compose_duet(r1, r2, root):
         if bearb[b] and not bearb[b+1]: buildb[b] = True
 
     ev = dict(bpm=bpm, dp16=dp16, N16=N16, NBAR=NBAR, root=root, bear=bear, rs=(r1+r2)/2,
-              style=st, style_name="techno",
+              style=st, style_name="duet",     # its own voice bank: NOT the 01 techno kit
               notes=[], drums=[], cc=[], volz=volz, kurtz=kurtz, bearb=bearb)
     CONS = [0, 3, 7, 12]          # consonant offsets vs bass (m3, P5, octave)
     TENS = [1, 2, 6, 8, 10]       # tension offsets (2nds, tritone, b6, b7)

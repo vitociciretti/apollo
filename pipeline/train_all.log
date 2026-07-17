@@ -1,0 +1,8 @@
+NVDA: 80 epochs, final val NLL 1.1979
+MSFT: 80 epochs, final val NLL 1.2852
+GOOGL: 80 epochs, final val NLL 1.2464
+AAPL: 80 epochs, final val NLL 1.2588
+META: 80 epochs, final val NLL 1.1069
+TSLA: 80 epochs, final val NLL 1.2676
+AMZN: 80 epochs, final val NLL 1.2831
+NFLX: 80 epochs, final val NLL 1.1956

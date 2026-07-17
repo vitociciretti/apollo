@@ -1,11 +1,13 @@
 """Mastering chain for the album: the automatable part of 'DAW production'.
 Per track: tonal EQ (low shelf, mud cut, air shelf) -> bass mono below 120 Hz ->
 glue compression (2:1, RMS detector) -> loudness normalization to target LUFS
-(K-weighted approx) -> brickwall limiter -> 16-bit with TPDF dither.
+(K-weighted approx) -> true-peak brickwall limiter (8x-oversampled detector,
+lookahead + smooth attack, ceiling 0.97 dBTP-safe) -> 16-bit with TPDF dither.
 Originals preserved in premaster/.
 """
 import numpy as np, wave, os, shutil
 from scipy import signal
+from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
 DIR = r"C:\Users\vito.ciciretti\Downloads\TechnoUS"
 PRE = os.path.join(DIR, "premaster")
@@ -54,16 +56,53 @@ def compress(L, R, sr, thresh_db=-18, ratio=2.0, atk=0.03, rel=0.2):
     gain = 10**(-(over*(1 - 1/ratio))/20)
     return L*gain, R*gain
 
-def limit(L, R, sr, ceiling=0.98):
-    """true brickwall: instant attack, smooth release, ceiling guaranteed"""
-    det = np.maximum(np.abs(L), np.abs(R))
-    g_req = np.minimum(1.0, ceiling/np.maximum(det, 1e-9))
-    a_rel = np.exp(-1/(0.08*sr))
-    g = np.empty_like(g_req); e = 1.0
-    for i in range(len(g_req)):
-        e = min(g_req[i], a_rel*e + (1 - a_rel))   # clamp to required -> ceiling exact
-        g[i] = e
-    return L*g, R*g
+def _tp_det(L, R, os=8):
+    """Per-sample TRUE-peak detector: |.| of the os-times oversampled signal,
+    folded back to one max per base-rate sample, floored by the sample peak."""
+    n = len(L)
+    Lu = signal.resample_poly(L, os, 1)[:n*os]
+    Ru = signal.resample_poly(R, os, 1)[:n*os]
+    det = np.maximum(np.abs(Lu), np.abs(Ru)).reshape(n, os).max(axis=1)
+    return np.maximum(det, np.maximum(np.abs(L), np.abs(R)))
+
+def true_peak(L, R, os=8):
+    Lu = signal.resample_poly(L, os, 1)
+    Ru = signal.resample_poly(R, os, 1)
+    return max(np.abs(Lu).max(), np.abs(Ru).max())
+
+def _release_env(g_target, sr, rel_s=0.080):
+    """Envelope e with e[i] <= g_target[i] and exponential release toward 1:
+    deficit d[i] = max(1-g_target[i], a*d[i-1]) computed vectorized in the
+    log domain (running max of log x[j] + j*c, c = 1/(rel_s*sr))."""
+    x = np.maximum(1.0 - g_target, 0.0)
+    c = 1.0/(rel_s*sr)
+    j = np.arange(len(x), dtype=np.float64)
+    with np.errstate(divide="ignore"):
+        lx = np.log(x) + j*c
+    d = np.exp(np.maximum.accumulate(lx) - j*c)
+    return 1.0 - d
+
+def limit(L, R, sr, ceiling=0.97):
+    """True-peak brickwall limiter. The detector is the 8x-oversampled peak
+    (not the sample peak), the gain envelope gets a 2 ms lookahead minimum +
+    2 ms averaged attack (still <= required gain pointwise) and an 80 ms
+    exponential release — no hard clipping, so no intersample overshoot is
+    manufactured. Re-detects up to 3x, then a global trim guarantees the
+    true-peak ceiling."""
+    la = max(2, int(0.002*sr))
+    for _ in range(3):
+        det = _tp_det(L, R)
+        g_req = np.minimum(1.0, ceiling/np.maximum(det, 1e-9))
+        if g_req.min() > 0.9995:
+            break
+        g_min = minimum_filter1d(g_req, size=2*la+1, mode="nearest")
+        g_sm = uniform_filter1d(g_min, size=la, mode="nearest")  # smooth attack
+        g = _release_env(g_sm, sr)     # <= g_sm pointwise, 80 ms release toward 1
+        L, R = L*g, R*g
+    tp = true_peak(L, R)
+    if tp > ceiling:
+        L, R = L*(ceiling/tp), R*(ceiling/tp)
+    return L, R
 
 def master(path):
     with wave.open(path) as w:
@@ -97,7 +136,7 @@ def master(path):
     with wave.open(path, "w") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(sr)
         w.writeframes(out.tobytes())
-    return final, np.abs(np.stack([L, R])).max()
+    return final, np.abs(np.stack([L, R])).max(), true_peak(L, R)
 
 if __name__ == "__main__":
     for f in sorted(os.listdir(DIR)):
@@ -108,5 +147,5 @@ if __name__ == "__main__":
                 shutil.copy2(pre, src)          # re-master from the clean premaster
             else:
                 shutil.copy2(src, pre)
-            lu, pk = master(src)
-            print(f"{f:28s} -> {lu:6.1f} LUFS, peak {pk:.3f}")
+            lu, pk, tp = master(src)
+            print(f"{f:28s} -> {lu:6.1f} LUFS, peak {pk:.3f}, true peak {tp:.3f}")
