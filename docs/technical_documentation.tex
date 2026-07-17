@@ -420,6 +420,232 @@ $B = \mathrm{clip}\bigl(\lfloor 120 + 40(\sigma_{\mathrm{ann}} - 0.20)\rfloor,\,
 \label{tab:album}
 \end{table}
 
+%=====================================================================
+\section{v4: form, melody, dynamics, and the choir}\label{sec:v4}
+
+Version 4 of the engine adds four data-driven layers on top of the grammar
+of \S\ref{sec:grammar} (implementation: \texttt{techno\_album.py} with the
+modules \texttt{regime.py}, \texttt{motif.py}, \texttt{volume\_perc.py},
+\texttt{choir.py}): musical \emph{form} from a regime segmentation, a
+per-asset \emph{theme} with development operators, a trading-\emph{volume}
+percussion channel, and a sung \emph{choir}. Two tracks extend the album
+beyond Table~\ref{tab:album}: 09 (\emph{Correlation One}, the two-asset
+duet in F minor) and 10 (\emph{Descensus Gradientis}, F minor, 145\,BPM),
+composed not from a price path but from the 80-epoch training history of
+the recurrent conditional-density model of \S\ref{sec:rnn}.
+
+\subsection{Regime segmentation: the change-point rule}\label{sec:v4regime}
+
+Let $n_B = K/16$ be the number of bars and evaluate, at each bar's final
+day, the annualized 21-day rolling volatility $v_b$ and the regime
+indicator $\beta_b$ of \eqref{eq:regime}. Define the bar-level volatility
+\emph{percentile rank} $\pi_b = \mathrm{rank}(v_b)/(n_B-1) \in [0,1]$.
+A new \emph{era} opens at bar $b$ when the percentile has jumped
+\begin{equation}
+\bigl|\pi_b - \pi_{b-w}\bigr| \;>\; c, \qquad w = 4 \text{ bars},\quad c = 0.25,
+\label{eq:cp}
+\end{equation}
+subject to a minimum era length of $6$ bars (candidate boundaries closer
+than $6$ bars to a previous boundary or to either edge are dropped). Eras
+are classified \textsf{calm}/\textsf{build}/\textsf{peak} by the tercile of
+their mean $\pi$ over non-bear bars; maximal runs of $\beta_b=1$ of length
+$\ge 2$ become \textsf{bear} sections (single-bar excursions are treated as
+noise, and single-bar gaps inside a bear run are bridged), with the final
+$1$--$2$ bars of each terminating run relabelled \textsf{recovery}; the
+first $4$ and last $2$ bars are forced \textsf{intro}/\textsf{outro}, and
+non-structural slivers shorter than $5$ bars are absorbed into their
+neighbours. Each section kind carries a \emph{mask} --- Boolean gates per
+layer (kick/bass/stabs/lead/pads), hat/percussion density multipliers, a
+half-time flag --- and an energy $e \in \{0.15,\dots,1.0\}$; the music bus
+is gain-staged \emph{before} the effects chain by
+\begin{equation}
+g_b \;=\; 0.55 + 0.45\,\operatorname{clip}\!\Bigl(\tfrac{e_b - 0.15}{0.85},\,0,\,1\Bigr),
+\end{equation}
+linearly interpolated across bar centres, so quiet sections are genuinely
+quiet. Section downbeats receive a crash; a one-bar sixteenth-note roll
+fills into every \textsf{peak} section.
+
+\subsection{The theme and its development operators}\label{sec:v4motif}
+
+\paragraph{Derivation.} Each asset owns one theme
+$\theta \in \{0,\dots,13\}^{8}$ (two diatonic octaves of scale degrees),
+derived deterministically from its \emph{first trading year}: the
+cumulative log-price $X_{1:252}$ is reduced to $8$ segment means, min--max
+normalized to $[0,1]$, rounded to degrees $0..9$, then musicality is
+enforced --- $\theta_1 = 0$ (tonic anchor), successive leaps clamped to
+$\le 4$ degrees, and the cadence pulled until
+$|\theta_8 - \theta_1| \le 2$. The eight resulting themes are distinct: the
+melody of each track is literally the shape of that stock's first year.
+
+\paragraph{Development.} Per bar $b$, one of five maps
+$\{0,\dots,13\}^{8} \to \{0,\dots,13\}^{8}$ is selected by the bar state
+$(\beta_b, z_b, \pi_b)$, first match wins:
+\begin{align*}
+\textbf{inversion } (\beta_b = 1):\quad & \mathcal I(\theta)_i =
+  \bigl(\min\nolimits_j \theta_j + \max\nolimits_j \theta_j\bigr) - \theta_i,\\
+\textbf{transposition } (|z_b| > 1.5):\quad & \mathcal T(\theta)_i =
+  \operatorname{clip}\bigl(\theta_i + \lfloor z_b \rfloor,\, 0,\, 13\bigr),\\
+\textbf{diminution } (\pi_b > 0.8):\quad & \mathcal D(\theta) =
+  \theta \text{ on a half-bar grid, played twice},\\
+\textbf{augmentation } (\pi_b < 0.3):\quad & \mathcal A(\theta) =
+  \theta_{1:4} \text{ or } \theta_{5:8} \text{ (bar parity), doubled durations},\\
+\textbf{prime } (\text{else}):\quad & \mathrm{id}(\theta).
+\end{align*}
+The inversion is an exact mirror in the theme's own compass; a stretched
+trend shifts the register; high volatility doubles time; calm stretches it.
+In the audio engine the bear-bar inversion is realized \emph{chromatically}:
+degrees are first mapped to MIDI via the home scale and mirrored around the
+fixed integer pivot $m_{\min} + m_{\max}$ of the theme's own compass, so
+every semitone interval is exactly negated (degree-space mirrors do not
+negate intervals, scale steps being uneven). In \textsf{bear} sections the
+lead is the featured voice: the inverted theme over the pads.
+
+\subsection{Trading volume as percussion density}\label{sec:v4volume}
+
+Let $V_t$ be daily log-volume, aligned $1{:}1$ with $r_t$. The per-bar
+density is the smoothed percentile rank of bar-mean log-volume,
+\begin{equation}
+d_b \;=\; \operatorname{MA}_3\!\Bigl(
+  \tfrac{\mathrm{rank}(\bar V_b)}{n_B - 1} \Bigr) \in [0,1],
+\qquad \bar V_b = \text{mean of } V_t \text{ over bar } b .
+\end{equation}
+Hat velocities scale by the factor $0.55 + 0.60\, d_b$, and the odd-sixteenth
+percussion ladder opens position by position as $d_b$ exceeds fixed
+thresholds in $\{0.25,\dots,0.90\}$: heavy tape is audible as busy
+percussion. Separately, with the local spike $s_t = V_t -
+\operatorname{MA}_{21}(V)_t$, a bar is an \emph{earnings-fill} bar when its
+maximum single-day spike lies in the top decile of per-bar maxima
+($\approx n_B/10$ fills per track); such bars get a snare/clap fill in the
+last beat, suppressed where the kit is gated off or a section fill already
+fires.
+
+\subsection{The key-modulation trigger}\label{sec:v4key}
+
+Define the bull indicator at bar $b$ as $\mathrm{bull}_b = \ind\{z_b > 1\}$
+with $z_b$ the 252-day trend z-score of \S\ref{sec:grammar} evaluated at the
+bar's final day. A section $[b_0, b_1)$ that is not \textsf{bear} and
+satisfies $\mathrm{bull}_b = 1$ for \emph{every} bar modulates melody and
+stabs to the \emph{relative major}: root $\rho + 3$, scale
+$\mathcal S_{\mathrm{maj}} = \{0,2,4,5,7,9,11\}$. The lift is
+section-quantized by construction --- a strong bull regime is heard as the
+whole passage brightening, and the home minor returns when the regime ends.
+
+\subsection{The choir: TTS $\to$ phase vocoder $\to$ stacked vocoder}\label{sec:v4choir}
+
+The sung voice of tracks 01/07/09/10 is a fully synthetic pipeline
+(\texttt{choir.py}); no human singer is recorded.
+
+\begin{enumerate}
+\item \textbf{TTS.} Each lyric phrase is rendered by a local
+  text-to-speech voice (a locally installed \texttt{piper} model when
+  available, else Windows SAPI), giving a spoken take $x(t)$.
+\item \textbf{Segmentation.} The take is split into as many syllable-like
+  chunks as there are melody notes: silence-trimmed, then boundaries placed
+  at energy minima of the smoothed envelope near the equal-split positions;
+  chunks with no voiced core extend backward over the previous vowel
+  (melisma rule).
+\item \textbf{Pitch mapping.} Per chunk, the fundamental $f_0$ is measured
+  by windowed autocorrelation (with octave disambiguation and parabolic
+  refinement). The chunk is phase-vocoder time-stretched --- STFT with
+  hop-ratio magnitude interpolation and phase advance accumulation --- to
+  its note duration, and resampled by $2^{s/12}$ with
+  $s = \operatorname{clip}(m - \mathrm{midi}(f_0),\, \pm 8\ \mathrm{st})$,
+  where $m$ is the melody note; the clamp protects formants, and when the
+  melody median sits more than $5$\,st from the speaking register the TTS
+  source is first re-rendered at a shifted SSML prosody pitch so the clamp
+  never binds. Voiced sub-blocks absorb the note duration while consonants
+  keep near-natural length, and a closed loop re-measures the output $f_0$
+  and corrects residual errors of $0.3$--$6$\,st.
+\item \textbf{Stacking and vocoding.} Five such voices at offsets
+  $\{0, +12, +7, -12, +3\}$ semitones (octave-folded to stay within
+  $\pm 15$\,st of the source register), each with $\pm 8$-cent detune,
+  $\pm 12$\,ms onset jitter and a 5\,Hz vibrato ramping in after 150\,ms,
+  are summed; the stacked group receives \emph{one} 20-band channel-vocoder
+  pass onto a soft-saw carrier stack playing the same melody notes, and the
+  output is mixed $0.6$ vocoded $+\ 0.4$ dry. A wordless formant-synthesis
+  choir (pulse-train glottal source through three formant bandpasses) sits
+  underneath as a pad and opens/closes track 10.
+\end{enumerate}
+
+On track 10 the melody \emph{is} the loss curve: windows of the validation
+NLL over epochs $[e_0, e_1)$ are resampled to $5$--$7$ notes and the
+normalized loss is mapped onto F harmonic minor --- epoch-0 chaos at degree
+$9$, convergence on the tonic --- so the choir literally sings gradient
+descent down to F. New best-validation epochs fire impacts (only the $8$
+largest improvements), the learning-rate decays at epochs 30 and 60 are the
+section transitions, and the train/validation gap detunes the pads.
+
+\subsection{Joint transformer sampler: scorecard}\label{sec:v4transformer}
+
+A decoder-only transformer (4 layers, $d_{\mathrm{model}} = 64$, 4 heads,
+context 256) extends the univariate model of \S\ref{sec:rnn} to the
+\emph{joint} law of all eight tickers: per-ticker Student-$t$ heads with
+cross-sectional dependence injected by bootstrapping in-sample rows of the
+8-dimensional standardized-residual matrix. Trained on the 3558 common
+trading days (2012-05-21 to 2026-07-16, post META IPO); best validation NLL
+$7.4704$ (summed over 8 tickers); sample length 4032 days.
+
+\begin{table}[h]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l cc cc cc cc cc}
+\toprule
+ & \multicolumn{2}{c}{ann.\ vol} & \multicolumn{2}{c}{kurtosis}
+ & \multicolumn{2}{c}{$\mathrm{ACF}_{|r|}(1)$}
+ & \multicolumn{2}{c}{$\mathrm{ACF}_{|r|}(21)$}
+ & \multicolumn{2}{c}{GPH $\hat d$}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+ticker & real & TF & real & TF & real & TF & real & TF & real & TF\\
+\midrule
+NVDA  & 44.7\% & 37.7\% & 10.7 & 5.2 & 0.190 & 0.045 & 0.092 & 0.041 & 0.371 & 0.271\\
+AAPL  & 28.3\% & 20.1\% &  9.6 & 5.0 & 0.206 & 0.111 & 0.073 & 0.038 & 0.395 & 0.334\\
+MSFT  & 26.3\% & 19.8\% & 11.3 & 4.4 & 0.232 & 0.044 & 0.068 & 0.025 & 0.354 & 0.255\\
+GOOGL & 27.6\% & 25.2\% &  9.6 & 7.3 & 0.138 & 0.009 & 0.050 & 0.060 & 0.283 & 0.310\\
+AMZN  & 32.1\% & 25.5\% &  8.9 & 5.1 & 0.174 & 0.077 & 0.063 & 0.067 & 0.354 & 0.349\\
+META  & 39.8\% & 29.2\% & 23.8 & 7.2 & 0.110 & 0.046 & 0.085 & 0.044 & 0.305 & 0.355\\
+NFLX  & 45.8\% & 27.9\% & 32.4 & 6.8 & 0.129 & 0.068 & 0.034 & 0.044 & 0.223 & 0.324\\
+TSLA  & 56.8\% & 44.0\% &  7.5 & 5.9 & 0.126 & 0.054 & 0.060 & 0.056 & 0.461 & 0.304\\
+\bottomrule
+\end{tabular}
+\caption{Transformer scorecard, per ticker: real series vs transformer (TF)
+sample. Real columns use the 8-ticker common sample (post META IPO).}
+\label{tab:tfscorecard}
+\end{table}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lcc}
+\toprule
+measure & real & transformer sample\\
+\midrule
+full-sample corr(NVDA, AAPL) & 0.484 & 0.266\\
+crisis corr (top-decile joint-vol days) & 0.640 & 0.213\\
+\bottomrule
+\end{tabular}\\[10pt]
+\begin{tabular}{lccc}
+\toprule
+metric (NVDA) & real (docs) & LSTM & transformer\\
+\midrule
+annualized vol & 45.2\% & 53.4\% & 37.7\%\\
+kurtosis & 9.8 & 10.1 & 5.2\\
+$\mathrm{ACF}_{|r|}(1)$ & 0.171 & 0.131 & 0.045\\
+$\mathrm{ACF}_{|r|}(21)$ & 0.092 & 0.089 & 0.041\\
+GPH $\hat d$ & 0.397 & 0.516 & 0.271\\
+\bottomrule
+\end{tabular}
+\caption{Left: cross-sectional dependence, real vs transformer sample.
+Right: NVDA baseline comparison against the univariate LSTM of
+\S\ref{sec:rnn} (the real column there uses the full 2010--2026 sample, so
+values differ slightly from Table~\ref{tab:tfscorecard}).}
+\label{tab:tfcross}
+\end{table}
+
+The verdict is honest: the transformer matches the joint framework but
+under-reproduces tails, volatility clustering and (crucially) crisis
+correlation relative to both the real data and the univariate LSTM ---
+which is why the album's closer sings the LSTM's loss curve, not the
+transformer's.
+
 \section{Video synchronization}
 
 The video frame at time $s\in[0, K\tau]$ displays days

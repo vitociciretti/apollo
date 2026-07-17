@@ -133,12 +133,12 @@ def _kick(genre, vel):
         y = _pitch_body(72, 55, 0.300, 0.045, 7.5)
         y = _lp(y, 350, 2)
         y = _attack(y, 8)
-    elif g == "dub":        # deep muffled sub thud, lowpassed 200 Hz
-        y = _pitch_body(60, 42, 0.280, 0.040, 10)
+    elif g == "dub":        # deep muffled sub thud, lowpassed 200 Hz — tuned
+        y = _pitch_body(52, 36, 0.280, 0.040, 10)   # to 36 Hz: the album's sub floor
         y = _lp(y, 200, 4)
         y = _attack(y, 6)
-    elif g == "prog":       # tight mid-punch
-        y = _pitch_body(130, 60, 0.110, 0.012, 26)
+    elif g == "prog":       # tight mid-punch, tuned high (66 Hz)
+        y = _pitch_body(130, 66, 0.110, 0.012, 26)
         knock = _bp(_noise_burst(0.030, 90), 150, 320, 2)
         y[: len(knock)] += 0.7 * knock
         y = _attack(y, 3)
@@ -159,8 +159,8 @@ def _kick(genre, vel):
         click = _hp(_noise_burst(0.007, 550), 4500, 2)
         y[: len(click)] += 2.2 * click
         y = _attack(y, 3)
-    elif g == "acid":       # 909-like: tuned HIGH (60 Hz) and tight, bright click
-        y = _pitch_body(112, 60, 0.130, 0.013, 22)
+    elif g == "acid":       # 909-like: tuned HIGHEST (70 Hz) and tight, bright click
+        y = _pitch_body(118, 70, 0.130, 0.013, 22)
         c = _hp(_noise_burst(0.007, 450), 2500, 2)
         y[: len(c)] += 0.7 * c
         y = _attack(y, 3)

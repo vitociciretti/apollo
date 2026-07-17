@@ -1,0 +1,18 @@
+track                       style  bpm    len
+01_Chipmaker               techno  131 2:37 bars= 86 mod=  2 fills=10 rmsrange=16.3dB
+    sections: intro:7 bear:10 recovery:2 calm:10 build:12 calm:5 bear:2 recovery:2 build:5 peak:9 bear:2 recovery:2 peak:16 outro:2
+02_Cupertino            deephouse  117 2:56 bars= 86 mod=  8 fills=10 rmsrange=22.4dB
+    sections: intro:4 build:10 bear:6 recovery:2 build:9 bear:2 recovery:5 build:8 bear:1 recovery:3 peak:9 build:5 bear:3 recovery:2 build:10 bear:1 recovery:4 outro:2
+03_Redmond                    dub  115 2:59 bars= 86 mod= 22 fills= 9 rmsrange=16.3dB
+    sections: intro:4 build:31 calm:9 build:6 peak:7 build:6 bear:4 recovery:4 build:12 bear:1 outro:2
+04_PageRank                  prog  125 2:45 bars= 86 mod=  0 fills= 9 rmsrange=17.0dB
+    sections: intro:6 bear:2 recovery:5 build:24 calm:8 bear:1 recovery:1 build:8 peak:9 bear:5 recovery:2 build:8 bear:1 recovery:4 outro:2
+05_Everything_Store     warehouse  130 2:38 bars= 86 mod=  0 fills= 9 rmsrange=17.4dB
+    sections: intro:9 bear:2 recovery:1 build:10 bear:2 recovery:2 peak:7 calm:12 build:6 peak:6 build:7 bear:7 recovery:2 build:11 outro:2
+06_Social_Graph            breaks  127 3:29 bars=111 mod=  8 fills=11 rmsrange=16.6dB
+    sections: intro:7 bear:1 recovery:4 build:6 calm:7 build:6 calm:13 peak:5 bear:2 recovery:2 build:5 peak:7 build:11 bear:9 recovery:2 build:21 bear:1 outro:2
+07_Stream                  trance  140 2:27 bars= 86 mod=  8 fills= 7 rmsrange=15.2dB
+    sections: intro:8 bear:7 recovery:2 build:8 peak:8 build:30 bear:7 recovery:2 build:12 outro:2
+08_Ludicrous                 acid  140 2:24 bars= 84 mod=  0 fills=11 rmsrange=11.1dB
+    sections: intro:6 build:7 peak:6 calm:17 build:10 bear:1 recovery:3 peak:6 build:6 bear:13 recovery:2 build:5 outro:2
+album written to C:\Users\vito.ciciretti\Downloads\TechnoUS

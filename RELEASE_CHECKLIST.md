@@ -5,7 +5,7 @@ your identity and payment details.
 
 ## Already done (in this repo / Downloads\TechnoUS)
 
-- [x] 8 masters, distributor-compliant: 44.1 kHz / 16-bit / stereo WAV
+- [x] 10 masters, distributor-compliant: 44.1 kHz / 16-bit / stereo WAV
 - [x] Cover art `cover_3000.jpg`: 3000×3000 RGB JPG (min is 3000×3000; no logos,
       no URLs, no ticker symbols — all compliant)
 - [x] Track titles clean of trademarks (no tickers/company names)
@@ -23,9 +23,12 @@ your identity and payment details.
      until you claim your artist profile)
    - **Apollo Markets / Apollo Process** — distinctive, still on-concept
    - **Vito Ciciretti** — the quant-brand play: ties the album to your research identity
-4. **Upload** — new album → "TECH(NO) US" → 8 tracks in order → cover JPG.
-   Metadata per track below. Genre: Electronic / Techno. Language: instrumental.
-   "AI-generated vocals?" — No (no vocals). Songwriter: your legal name
+4. **Upload** — new album → "TECH(NO) US" → 10 tracks in order → cover JPG.
+   Metadata per track below. Genre: Electronic / Techno. Language: instrumental
+   except tracks 01/07/09 (English vocals) and 10 (Latin vocals).
+   "AI-generated vocals?" — **Yes for tracks 01, 07, 09 and 10** (the choir is a
+   vocoded synthetic voice — TTS pitch-mapped and vocoded, no human singer;
+   distributors ask, so disclose); No for the rest. Songwriter: your legal name
    (composition = the mapping design; see docs).
 5. **Release date** — set ≥ 2 weeks out if you want to pitch to editorial playlists
    via Spotify for Artists; "as soon as possible" otherwise.
@@ -34,17 +37,20 @@ your identity and payment details.
 
 ## Track metadata (copy-paste)
 
-| # | Title | Length | ISRC |
-|---|---|---|---|
-| 1 | Chipmaker | 2:38 | auto-assigned by distributor |
-| 2 | Cupertino | 2:56 | " |
-| 3 | Redmond | 2:59 | " |
-| 4 | PageRank | 2:45 | " |
-| 5 | Everything Store | 2:39 | " |
-| 6 | Social Graph | 3:30 | " |
-| 7 | Stream | 2:27 | " |
-| 8 | Ludicrous | 2:24 | " |
-| 9 | Correlation One | 2:43 | " |
+| # | Title | Length | AI vocals? | ISRC |
+|---|---|---|---|---|
+| 1 | Chipmaker | 2:38 | **Yes** (vocoded synthetic voice) | auto-assigned by distributor |
+| 2 | Cupertino | 2:56 | No | " |
+| 3 | Redmond | 2:59 | No | " |
+| 4 | PageRank | 2:45 | No | " |
+| 5 | Everything Store | 2:39 | No | " |
+| 6 | Social Graph | 3:30 | No | " |
+| 7 | Stream | 2:27 | **Yes** (vocoded synthetic voice) | " |
+| 8 | Ludicrous | 2:24 | No | " |
+| 9 | Correlation One | 2:44 | **Yes** (vocoded synthetic voice) | " |
+| 10 | Descensus Gradientis | 2:39 | **Yes** (vocoded synthetic voice, Latin) | " |
+
+(Lengths measured from the mastered WAVs in `Downloads\TechnoUS`.)
 
 Album description (for stores that take one):
 
